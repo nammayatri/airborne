@@ -1,12 +1,14 @@
 package `in`.juspay.airborneplugin
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.Keep
 import `in`.juspay.airborne.HyperOTAServices
 import `in`.juspay.airborne.LazyDownloadCallback
 import `in`.juspay.airborne.TrackerCallback
 import `in`.juspay.hyperutil.constants.LogLevel
 import org.json.JSONObject
+import `in`.juspay.airborne.ota.OTADownloadWorker
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
 
@@ -58,8 +60,36 @@ class Airborne(
     private val applicationManager = hyperOTAServices.createApplicationManager(airborneInterface.getDimensions())
 
     init {
-        airborneObjectMap.put(airborneInterface.getNamespace(), this)
-        applicationManager.loadApplication(airborneInterface.getNamespace(), airborneInterface.getLazyDownloadCallback())
+        val namespace = airborneInterface.getNamespace()
+        val existing = airborneObjectMap.putIfAbsent(namespace, this)
+        if (existing != null) {
+            Log.w(TAG, "Airborne already initialized for '$namespace'; ignoring duplicate construction")
+        }
+        applicationManager.shouldUpdate = airborneInterface.enableBootDownload()
+        persistWorkerConfig(context, namespace, releaseConfigUrl, airborneInterface.getDimensions())
+        applicationManager.loadApplication(namespace, airborneInterface.getLazyDownloadCallback())
+    }
+
+    private fun persistWorkerConfig(
+        context: Context,
+        namespace: String,
+        releaseConfigUrl: String,
+        dimensions: Map<String, String>
+    ) {
+        try {
+            val dimJson = JSONObject()
+            dimensions.forEach { (k, v) -> dimJson.put(k, v) }
+            val config = JSONObject()
+                .put("releaseConfigUrl", releaseConfigUrl)
+                .put("dimensions", dimJson)
+                .toString()
+            context.getSharedPreferences(namespace, Context.MODE_PRIVATE)
+                .edit()
+                .putString(WORKER_CONFIG_KEY, config)
+                .apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to persist worker config for namespace '$namespace'", e)
+        }
     }
 
     private fun bootComplete(filePath: String) {
@@ -105,6 +135,37 @@ class Airborne(
         applicationManager.setSslConfig(sslSocketFactory, trustManager)
     }
 
+    /**
+     * Check if an OTA update is available.
+     * Delegates to ApplicationManager which handles the network call and version comparison.
+     */
+    @Keep
+    fun checkForUpdate(): String {
+        return applicationManager.checkForUpdate()
+    }
+
+    /**
+     * Download and install the latest OTA bundle.
+     * Delegates to ApplicationManager.downloadUpdate() which reuses the same
+     * download/install infrastructure as boot-time updates.
+     */
+    @Keep
+    fun downloadUpdate(onComplete: (success: Boolean) -> Unit) {
+        applicationManager.downloadUpdate(onComplete = onComplete)
+    }
+
+    /**
+     * True when a newer bundle is committed to disk but the running JS in V8
+     * is still the boot-time one. Hosts should check this on
+     * `MainActivity.onCreate` and force a process restart when true — required
+     * for OEMs (e.g. OnePlus) that keep the process alive across "kill from
+     * recents", which would otherwise leave the old JS pinned in V8.
+     */
+    @Keep
+    fun hasPendingBundleUpdate(): Boolean {
+        return applicationManager.hasPendingBundleUpdate()
+    }
+
     companion object {
 //        private var initializer: (() -> Airborne)? = null
 //
@@ -145,7 +206,10 @@ class Airborne(
 //            }
 //        }
 
-        public val airborneObjectMap: MutableMap<String, Airborne> = mutableMapOf()
+        private const val TAG = "Airborne"
+        internal const val WORKER_CONFIG_KEY = "airborne_worker_config"
+
+        val airborneObjectMap: MutableMap<String, Airborne> = java.util.concurrent.ConcurrentHashMap()
 
         /**
          * Default LazyDownloadCallback implementation.
@@ -168,6 +232,15 @@ class Airborne(
                     println("AirborneReact: Lazy splits installation failed")
                 }
             }
+        }
+
+        /**
+         * Trigger a background OTA download via WorkManager.
+         * Call from FCM service or any context — does not require RN.
+         */
+        @JvmStatic
+        fun triggerBackgroundDownload(context: Context, namespace: String) {
+            OTADownloadWorker.enqueue(context, namespace)
         }
     }
 }

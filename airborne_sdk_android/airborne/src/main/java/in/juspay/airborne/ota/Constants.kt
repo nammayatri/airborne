@@ -24,6 +24,7 @@ internal object Constants {
     const val PACKAGE_MANIFEST_FILE_NAME = "pkg.json"
     const val CONFIG_FILE_NAME = "config.json"
     const val RESOURCES_FILE_NAME = "resources.json"
+    const val INSTALL_MARKER_FILE_NAME = "install_marker.txt"
     const val DEFAULT_VERSION = "1"
     val DEFAULT_CONFIG = ReleaseConfig.Config(
         version = "v000000",

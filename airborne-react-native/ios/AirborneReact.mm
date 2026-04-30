@@ -1,7 +1,6 @@
 #import "AirborneReact.h"
 #import "Airborne.h"
 #import <React/RCTLog.h>
-#import <Airborne/AJPLoggerDelegate.h>
 #import <Airborne/AJPApplicationManager.h>
 #import <Airborne/Airborne-Swift.h>
 
@@ -58,6 +57,31 @@ static NSString * const defaultNamespace = @"default";
         reject(@"AIRBORNE_ERROR", exception.reason, nil);
     }
 }
+
+- (void)checkForUpdate:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+}
+
+- (void)downloadUpdate:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+}
+
+- (void)startBackgroundDownload:(RCTPromiseResolveBlock)resolve
+                         reject:(RCTPromiseRejectBlock)reject {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);
+}
+
+- (void)reloadApp:(RCTPromiseResolveBlock)resolve
+           reject:(RCTPromiseRejectBlock)reject {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"reloadApp is not implemented on iOS", nil);
+}
+
+- (void)hasPendingBundleUpdate:(RCTPromiseResolveBlock)resolve
+                        reject:(RCTPromiseRejectBlock)reject {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"hasPendingBundleUpdate is not implemented on iOS", nil);
+}
 #else
 RCT_EXPORT_METHOD(readReleaseConfig:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
@@ -88,6 +112,31 @@ RCT_EXPORT_METHOD(getBundlePath:(RCTPromiseResolveBlock)resolve
     } @catch (NSException *exception) {
         reject(@"AIRBORNE_ERROR", exception.reason, nil);
     }
+}
+
+RCT_EXPORT_METHOD(checkForUpdate:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+}
+
+RCT_EXPORT_METHOD(downloadUpdate:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+}
+
+RCT_EXPORT_METHOD(startBackgroundDownload:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);
+}
+
+RCT_EXPORT_METHOD(reloadApp:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"reloadApp is not implemented on iOS", nil);
+}
+
+RCT_EXPORT_METHOD(hasPendingBundleUpdate:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"hasPendingBundleUpdate is not implemented on iOS", nil);
 }
 #endif
 

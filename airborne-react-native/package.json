@@ -1,6 +1,6 @@
 {
   "name": "airborne-react-native",
-  "version": "0.33.0",
+  "version": "0.33.0-xota.test.2",
   "description": "Airborne",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -47,14 +47,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/juspay/airborne.git"
+    "url": "git+https://github.com/PraveenGongada/airborne.git"
   },
-  "author": "juspay <kuntimaddi.manideep@juspay.in> (https://github.com/juspay)",
+  "author": "MovingTech <sdk@nammayatri.in> (https://github.com/PraveenGongada)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/juspay/airborne/issues"
+    "url": "https://github.com/PraveenGongada/airborne/issues"
   },
-  "homepage": "https://github.com/juspay/airborne#readme",
+  "homepage": "https://github.com/PraveenGongada/airborne#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

@@ -82,14 +82,14 @@ afterEvaluate {
             release(MavenPublication) {
                 from components.release
 
-                groupId = 'io.juspay'
+                groupId = 'com.movingtech'
                 artifactId = 'airborne'
                 version = System.getenv("VERSION") ?: resolveVersion()
 
                 pom {
                     name = 'Airborne'
                     description = 'Airborne empowers developers to effortlessly integrate Over-The-Air (OTA) update capabilities into their Android, iOS, and React Native applications. Our primary focus is to provide robust, easy-to-use SDKs and plugins that streamline the update process directly within your client applications.'
-                    url = 'https://github.com/juspay/airborne'
+                    url = 'https://github.com/PraveenGongada/airborne'
                     licenses {
                         license {
                             name = 'The Apache License, Version 2.0'
@@ -98,15 +98,15 @@ afterEvaluate {
                     }
                     developers {
                         developer {
-                            id = 'juspay'
-                            name = 'Juspay'
-                            email = 'pp-sdk@juspay.in'
+                            id = 'movingtech'
+                            name = 'MovingTech'
+                            email = 'sdk@nammayatri.in'
                         }
                     }
                     scm {
-                        connection = 'scm:git:github.com/juspay/airborne.git'
-                        developerConnection = 'scm:git:ssh://github.com/juspay/airborne.git'
-                        url = 'https://github.com/juspay/airborne/tree/main/airborne_sdk_android/airborne'
+                        connection = 'scm:git:github.com/PraveenGongada/airborne.git'
+                        developerConnection = 'scm:git:ssh://github.com/PraveenGongada/airborne.git'
+                        url = 'https://github.com/PraveenGongada/airborne/tree/main/airborne_sdk_android/airborne'
                     }
                 }
             }
@@ -134,6 +134,8 @@ dependencies {
     implementation('com.google.android.material:material:1.12.0')
     implementation('androidx.core:core-ktx:1.1.0')
     implementation('com.squareup.okhttp3:okhttp:3.3.0')
+    implementation('androidx.work:work-runtime-ktx:2.9.1')
+    implementation('org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3')
 
     api ('in.juspay:hyperutil:2.2.5-xota.05')
 
