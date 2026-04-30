@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.X509TrustManager;
 
 import in.juspay.airborne.TrackerCallback;
 import in.juspay.airborne.security.HyperSSLSocketFactory;
@@ -73,6 +74,7 @@ public class NetUtils {
     private boolean trackMetrics = false;
     private final NetworkSummarizer networkSummarizer = new NetworkSummarizer();
     private SSLSocketFactory sslSocketFactory;
+    private X509TrustManager customTrustManager;
     private String sessionId;
 
     @SuppressWarnings("SameParameterValue")
@@ -198,6 +200,17 @@ public class NetUtils {
 
     public void setReadTimeout(@IntRange(from = 0, to = Integer.MAX_VALUE) int readTimeout) {
         this.readTimeout = readTimeout;
+    }
+
+    /**
+     * Install a custom SSL socket factory + trust manager pair, used by every
+     * subsequent request. Intended for mTLS / certificate pinning at the
+     * application layer.
+     */
+    @Keep
+    public void setSslConfig(@NonNull SSLSocketFactory sslSocketFactory, @NonNull X509TrustManager trustManager) {
+        this.sslSocketFactory = sslSocketFactory;
+        this.customTrustManager = trustManager;
     }
 
     public void setConnectionTimeout(@IntRange(from = 0, to = Integer.MAX_VALUE) int connectionTimeout) {
@@ -371,11 +384,13 @@ public class NetUtils {
         if (options != null) {
             setOptions(clientBuilder, options);
         }
-        if (sslSocketFactory != null && HyperSSLSocketFactory.DEFAULT_TRUST_MANAGER != null) {
-            clientBuilder.sslSocketFactory(
-                    sslSocketFactory,
-                    HyperSSLSocketFactory.DEFAULT_TRUST_MANAGER
-            );
+        if (sslSocketFactory != null) {
+            X509TrustManager tm = customTrustManager != null
+                    ? customTrustManager
+                    : HyperSSLSocketFactory.DEFAULT_TRUST_MANAGER;
+            if (tm != null) {
+                clientBuilder.sslSocketFactory(sslSocketFactory, tm);
+            }
         }
         long startTime = System.currentTimeMillis();
         Response response = clientBuilder.build().newCall(requestBuilder.build()).execute();

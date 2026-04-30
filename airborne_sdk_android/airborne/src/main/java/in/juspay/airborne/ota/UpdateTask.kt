@@ -24,6 +24,7 @@ import `in`.juspay.airborne.network.NetUtils
 import `in`.juspay.airborne.ota.ApplicationManager.StateKey
 import `in`.juspay.airborne.ota.Constants.APP_DIR
 import `in`.juspay.airborne.ota.Constants.CONFIG_FILE_NAME
+import `in`.juspay.airborne.ota.Constants.INSTALL_MARKER_FILE_NAME
 import `in`.juspay.airborne.ota.Constants.DEFAULT_CONFIG
 import `in`.juspay.airborne.ota.Constants.DEFAULT_RESOURCES
 import `in`.juspay.airborne.ota.Constants.DEFAULT_VERSION
@@ -76,7 +77,9 @@ internal class UpdateTask(
     private val netUtils: NetUtils,
     rcHeaders: Map<String, String>? = null,
     private val lazyDownloadCallback: LazyDownloadCallback?,
-    private val fromAirborne: Boolean = true
+    private val fromAirborne: Boolean = true,
+    private val packageTimeoutOverride: Long = 0L,
+    private val releaseConfigTimeoutOverride: Long = 0L
 ) {
     val updateUUID = UUID.randomUUID().toString()
 
@@ -88,7 +91,8 @@ internal class UpdateTask(
     private var currentStage = Stage.INITIALIZING
     private var currentStageStartTime = System.currentTimeMillis()
     private var releaseConfigTimeout =
-        (localReleaseConfig?.config ?: DEFAULT_CONFIG).releaseConfigTimeout
+        if (releaseConfigTimeoutOverride > 0) releaseConfigTimeoutOverride
+        else (localReleaseConfig?.config ?: DEFAULT_CONFIG).releaseConfigTimeout
     private var initTime = System.currentTimeMillis()
     private var updateTimedOut = AtomicBoolean(false)
     private var packageUpdate: Future<Update.Package>? = null
@@ -97,7 +101,7 @@ internal class UpdateTask(
 
     @Volatile
     private var packageTimeout =
-        (localReleaseConfig?.config ?: DEFAULT_CONFIG).bootTimeout
+        if (packageTimeoutOverride > 0) packageTimeoutOverride else (localReleaseConfig?.config ?: DEFAULT_CONFIG).bootTimeout
 
     @Volatile
     private var currentResult: UpdateResult = UpdateResult.NA
@@ -139,7 +143,7 @@ internal class UpdateTask(
 
     private fun updateTimeouts(fetchedReleaseConfig: ReleaseConfig) {
         releaseConfigTimeout = fetchedReleaseConfig.config.releaseConfigTimeout
-        packageTimeout = fetchedReleaseConfig.config.bootTimeout
+        packageTimeout = if (packageTimeoutOverride > 0) packageTimeoutOverride else fetchedReleaseConfig.config.bootTimeout
     }
 
     fun run(onFinish: OnFinishCallback) {
@@ -477,7 +481,14 @@ internal class UpdateTask(
         if (didWriteManifest) {
             Log.d(TAG, "Wrote package manifest.")
         }
-        val didInstall = didCopy && didWriteManifest
+        val didWriteMarker = if (didWriteManifest) {
+            writeInstallMarker(pkg.version).also {
+                if (it) Log.d(TAG, "Wrote install marker for ${pkg.version}.")
+            }
+        } else {
+            false
+        }
+        val didInstall = didCopy && didWriteManifest && didWriteMarker
 
         if (didInstall) {
             Log.d(TAG, "Installed new important package version: ${pkg.version}")
@@ -590,6 +601,9 @@ internal class UpdateTask(
 
     private fun writePackageManifest(packageManifest: Package): Boolean =
         writeManifest(PACKAGE_MANIFEST_FILE_NAME, packageManifest.toJSON().toString())
+
+    private fun writeInstallMarker(version: String): Boolean =
+        writeManifest(INSTALL_MARKER_FILE_NAME, version)
 
     private fun downloadPackageUpdate(fetched: Package): Update.Package {
         val local = localReleaseConfig?.pkg
@@ -871,7 +885,15 @@ internal class UpdateTask(
                         }
                     }
 
-                    if (tempWriter.write(filePathToSaveIn, extracted)) {
+                    val toWrite = try {
+                        Compression.maybeDecompressZip(extracted)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to decompress OTA payload $filePathToSaveIn", e)
+                        trackFileWriteError(filePathToSaveIn, e)
+                        return Result.Error()
+                    }
+
+                    if (tempWriter.write(filePathToSaveIn, toWrite)) {
                         Log.d(TAG, "File $filePathToSaveIn written to disk")
                         Result.Ok(Unit)
                     } else {

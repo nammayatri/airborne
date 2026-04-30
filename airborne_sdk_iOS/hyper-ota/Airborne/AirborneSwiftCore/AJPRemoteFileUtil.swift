@@ -147,11 +147,22 @@ public typealias AJPDownloadCallback = @convention(block) (Bool, Data?, String?,
                 )
             }
         }
+        let payload: Data
+        do {
+            payload = try AJPCompression.maybeDecompressZip(fileData)
+        } catch {
+            return (
+                false,
+                nil,
+                "Failed to decompress OTA payload from \(remoteURL): \(error)",
+                response
+            )
+        }
 
         // Write file to disk atomically
         do {
-            try fileData.write(to: URL(fileURLWithPath: localURL), options: .atomic)
-            return (true, fileData, nil, response)
+            try payload.write(to: URL(fileURLWithPath: localURL), options: .atomic)
+            return (true, payload, nil, response)
         } catch {
             return (
                 false,

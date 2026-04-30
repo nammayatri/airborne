@@ -1,465 +1,358 @@
-name: Create an airborne release
+name: Publish SDK
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
+    inputs:
+      publish_android:
+        description: 'Publish Android SDK to Maven Central'
+        type: boolean
+        default: false
+      publish_ios:
+        description: 'Publish iOS SDK to nammayatri-specs'
+        type: boolean
+        default: false
+      android_version:
+        description: 'Android SDK version (e.g. 0.7.3) — required if Android is checked'
+        type: string
+        required: false
+      ios_version:
+        description: 'iOS SDK version (e.g. 0.33.1) — required if iOS is checked'
+        type: string
+        required: false
+      rn_version:
+        description: 'RN plugin version (e.g. 0.33.1) — required if RN dist is checked'
+        type: string
+        required: false
 
 jobs:
-  tag-release:
+  publish-android:
+    if: ${{ github.event.inputs.publish_android == 'true' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main'
-    outputs:
-      version: ${{ steps.git_tag.outputs.version }}
-      is_new_version: ${{ steps.git_tag.outputs.is_new_version }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.89.0
-          targets: wasm32-unknown-unknown
-          components: rustfmt, clippy
-
-      - name: install cargo-edit to perform set-version
-        uses: baptiste0928/cargo-install@v2.2.0
-        with:
-          crate: cargo-edit
-          version: "0.13.6"
-
-      - name: install cocogitto
-        uses: baptiste0928/cargo-install@v2.2.0
-        with:
-          crate: cocogitto
-          version: "6.3.0"
-
-      - name: Install SSH key
-        env:
-          DEPLOY_KEY: ${{ secrets.AIRBORNE_DEPLOY_KEY }}
-        run: |
-          # create .ssh
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          # write private key
-          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-
-          # ensure github host key is known (avoid StrictHostKeyChecking prompt)
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Get current version
-        id: current_version
-        shell: bash
-        run: |
-          current_version=`cog -v get-version || echo "0.0.0"`
-          echo "current_version=$current_version" >> $GITHUB_OUTPUT
-
-      - name: Semver release
-        shell: bash
-        run: |
-          git config user.email "airborne_bot@juspay.in"
-          git config user.name "Airborne Bot"
-          cog bump --auto --skip-ci
-
-      - name: Set latest tag
-        id: git_tag
-        shell: bash
-        run: |
-          current_version=${{ steps.current_version.outputs.current_version }}
-          version=`cog -v get-version`
-          echo "version=$version" >> $GITHUB_OUTPUT
-
-          if [ "$version" != "$current_version" ]; then
-            echo "is_new_version=true" >> $GITHUB_OUTPUT
-            echo "New version detected: $current_version -> $version"
-          else
-            echo "is_new_version=false" >> $GITHUB_OUTPUT
-            echo "No version change detected: $version"
-          fi
-
-      - name: Push code to main
-        shell: bash
-        if: steps.git_tag.outputs.is_new_version == 'true'
-        run: |
-          git push origin main
-          git push origin --tags
-
-  server-docker-build:
-    needs: tag-release
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    strategy:
-      max-parallel: 5
-      matrix:
-        include:
-          - platform: linux/amd64
-            tag: linux-amd64
-            os: ubuntu-latest
-          - platform: linux/arm64
-            tag: linux-arm64
-            os: ubuntu-24.04-arm
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push production image
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          context: .
-          file: airborne_server/Dockerfile
-          tags: ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }}-${{ matrix.tag }}
-
-  server-create-manifest:
-    needs: [tag-release, server-docker-build]
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create manifest for multi-arch image
-        run: |
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }} \
-              ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-server:latest \
-              ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-server:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-  analytics-docker-build:
-    needs: [tag-release]
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    strategy:
-      max-parallel: 5
-      matrix:
-        include:
-          - platform: linux/amd64
-            tag: linux-amd64
-            os: ubuntu-latest
-          - platform: linux/arm64
-            tag: linux-arm64
-            os: ubuntu-24.04-arm
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push production image
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          context: .
-          file: airborne_analytics_server/Dockerfile
-          tags: ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }}-${{ matrix.tag }}
-
-  analytics-create-manifest:
-    needs: [tag-release, analytics-docker-build]
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create manifest for multi-arch image
-        run: |
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }} \
-              ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-analytics-server:latest \
-              ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-analytics-server:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-  dashboard-docker-build:
-    needs: [tag-release]
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    strategy:
-      max-parallel: 5
-      matrix:
-        include:
-          - platform: linux/amd64
-            tag: linux-amd64
-            os: ubuntu-latest
-          - platform: linux/arm64
-            tag: linux-arm64
-            os: ubuntu-24.04-arm
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push production image
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          context: ./airborne_dashboard
-          file: ./airborne_dashboard/Dockerfile
-          tags: ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }}-${{ matrix.tag }}
-
-  dashboard-create-manifest:
-    needs: [tag-release, dashboard-docker-build]
-    permissions:
-      contents: read
-      packages: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create manifest for multi-arch image
-        run: |
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }} \
-              ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-          docker buildx imagetools create --tag ghcr.io/${{ github.repository }}-dashboard:latest \
-              ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }}-linux-amd64 \
-              ghcr.io/${{ github.repository }}-dashboard:${{ needs.tag-release.outputs.version }}-linux-arm64
-
-  publish-to-maven-central:
-    needs: [tag-release]
     permissions:
       contents: read
       id-token: write
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.tag-release.outputs.version }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
 
-      - name: Filter paths
-        id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            hyper_ota:
-              - 'airborne_sdk_android/hyper-ota/**'
-            hyper_eta_react:
-              - 'airborne_sdk_android/hyper-eta-react/**'
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ github.event.inputs.android_version }}" ]; then
+            echo "::error::android_version is required when publish_android is checked"
+            exit 1
+          fi
+
+      - name: Bump airborneVersion
+        run: |
+          sed -i "s/^airborneVersion=.*/airborneVersion=${{ github.event.inputs.android_version }}/" airborne_sdk_android/version.properties
+          grep '^airborneVersion=' airborne_sdk_android/version.properties
 
       - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "17"
-          cache: "gradle"
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-      - name: Grant execute for Gradle wrapper
-        run: chmod +x gradlew
-        working-directory: airborne_sdk_android
-
-      - name: Import GPG
-        run: |
-          echo "VERSION=${{ env.VERSION }}" >> $GITHUB_ENV
-          echo "${SIGNING_KEY}" | base64 -d > /tmp/key.asc
-          gpg --batch --import /tmp/key.asc
-          # Export the decoded key for Gradle
-          echo "DECODED_SIGNING_KEY<<EOF" >> $GITHUB_ENV
-          echo "${SIGNING_KEY}" | base64 -d >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+      - name: Decode GPG signing key into env
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          echo "$SIGNING_KEY" | base64 -d > /tmp/key.asc
+          gpg --batch --import /tmp/key.asc
+          {
+            echo "DECODED_SIGNING_KEY<<EOF"
+            echo "$SIGNING_KEY" | base64 -d
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
-      # Publish aggregation (both modules). nmcp builds a single ZIP and uploads to Portal API
-      - name: Publish to Maven Central (Central Portal)
+      - name: Publish com.movingtech:airborne to Maven Central
         working-directory: airborne_sdk_android
-        run: ./gradlew --no-daemon publishAggregationToCentralPortal
         env:
-          # Central Portal token (username/password pair)
+          VERSION: ${{ github.event.inputs.android_version }}
           SONATYPE_MAVEN_USERNAME: ${{ secrets.SONATYPE_MAVEN_USERNAME }}
           SONATYPE_MAVEN_PASSWORD: ${{ secrets.SONATYPE_MAVEN_PASSWORD }}
-
-          # Gradle signing properties (nmcp uses existing publications)
           ORG_GRADLE_PROJECT_signingKey: ${{ env.DECODED_SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-
-  publish-to-npm:
-    needs: [tag-release]
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
-    permissions:
-      contents: read
-      id-token: write
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.tag-release.outputs.version }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.11.0"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Publish airborne-server-sdk
-        working-directory: airborne_server_clients/javascript/sdk
         run: |
-          npm ci
-          npm publish --access public
+          chmod +x gradlew
+          ./gradlew --no-daemon publishAggregationToCentralPortal
 
-      - name: Publish airborne-core-cli
-        working-directory: airborne-core-cli
-        run: |
-          sed -i "s|\"airborne-server-sdk\": \"file:../airborne_server_clients/javascript/sdk\"|\"airborne-server-sdk\": \"*\"|" package.json
-          npm ci
-          npm publish --access public
-
-      - name: Publish airborne-devkit
-        working-directory: airborne_cli
-        run: |
-          sed -i "s|\"airborne-core-cli\": \"file:../airborne-core-cli\"|\"airborne-core-cli\": \"*\"|" package.json
-          npm ci
-          npm publish --access public
-
-      - name: Publish airborne-react-native
-        working-directory: airborne-react-native
-        run: |
-          sed -i "s|\"airborne-devkit\": \"file:../airborne_cli\"|\"airborne-devkit\": \"*\"|" package.json
-          npm ci
-          npm publish --access public
-
-  release:
+  publish-ios:
+    if: ${{ github.event.inputs.publish_ios == 'true' }}
+    runs-on: macos-latest
     permissions:
       contents: write
-    needs:
-      [
-        tag-release,
-        server-create-manifest,
-        analytics-create-manifest,
-        dashboard-create-manifest,
-        publish-to-maven-central,
-        publish-to-npm,
-      ]
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main' && needs.tag-release.outputs.is_new_version == 'true'
+    env:
+      PODSPEC_PATH: airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec
+      AJPLOGGER_HEADER_PATH: scripts/ios-headers/AJPLoggerDelegate.h
+      SPEC_REPO_NAME: nammayatri-specs
+      SPEC_REPO_URL: https://github.com/nammayatri/ny-cocoapods-specs.git
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
-          ssh-key: ${{ secrets.AIRBORNE_DEPLOY_KEY}}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        # if: startsWith(github.ref, 'refs/tags/')
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ github.event.inputs.ios_version }}" ]; then
+            echo "::error::ios_version is required when publish_ios is checked"
+            exit 1
+          fi
+
+      - name: Bump podspec version
+        run: |
+          sed -i '' "s/s.version[[:space:]]*=[[:space:]]*'.*'/s.version          = '${{ github.event.inputs.ios_version }}'/" "$PODSPEC_PATH"
+          grep 's.version' "$PODSPEC_PATH" | head -1
+
+      # Mirrors scripts/push-test-artifacts.sh step 2: build the xcframework via the
+      # AirborneAggregate scheme, then patch the in-repo AJPLoggerDelegate.h into both
+      # slices so consumers that import <Airborne/AJPLoggerDelegate.h> resolve.
+      - name: Build xcframework
+        run: |
+          rm -rf /tmp/airborne-build
+          cd airborne_sdk_iOS/hyper-ota
+          xcodebuild -project Airborne.xcodeproj \
+            -scheme AirborneAggregate \
+            -configuration Release \
+            -derivedDataPath /tmp/airborne-build \
+            -quiet
+          test -d /tmp/airborne-build/Build/Products/Airborne.xcframework
+
+      - name: Patch AJPLoggerDelegate.h into xcframework
+        run: |
+          XCF=/tmp/airborne-build/Build/Products/Airborne.xcframework
+          test -f "$AJPLOGGER_HEADER_PATH"
+          cp "$AJPLOGGER_HEADER_PATH" "$XCF/ios-arm64/Airborne.framework/Headers/"
+          cp "$AJPLOGGER_HEADER_PATH" "$XCF/ios-arm64_x86_64-simulator/Airborne.framework/Headers/"
+          ls "$XCF/ios-arm64/Airborne.framework/Headers/" | grep AJPLoggerDelegate
+          ls "$XCF/ios-arm64_x86_64-simulator/Airborne.framework/Headers/" | grep AJPLoggerDelegate
+
+      - name: Zip xcframework
+        run: |
+          rm -f /tmp/airborne-build/Build/Products/Airborne.xcframework.zip
+          (cd /tmp/airborne-build/Build/Products && zip -ryq Airborne.xcframework.zip Airborne.xcframework)
+          ls -lh /tmp/airborne-build/Build/Products/Airborne.xcframework.zip
+
+      - name: Tag the version
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git tag -f "v${{ github.event.inputs.ios_version }}"
+          git push origin "v${{ github.event.inputs.ios_version }}" --force
+
+      - name: Create GitHub Release with xcframework asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ github.event.inputs.ios_version }}" \
+            /tmp/airborne-build/Build/Products/Airborne.xcframework.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Airborne iOS SDK v${{ github.event.inputs.ios_version }}" \
+            --notes "Airborne iOS xcframework v${{ github.event.inputs.ios_version }}"
+
+      - name: Configure git auth for spec repo
+        env:
+          SPEC_TOKEN: ${{ secrets.COCOAPODS_SPEC_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${SPEC_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Push spec to nammayatri-specs
+        run: |
+          pod repo add "$SPEC_REPO_NAME" "$SPEC_REPO_URL" 2>/dev/null \
+            || pod repo update "$SPEC_REPO_NAME"
+          pod repo push "$SPEC_REPO_NAME" "$PODSPEC_PATH" \
+            --skip-import-validation \
+            --allow-warnings
+
+  publish-rn-dist:
+    needs: [publish-android, publish-ios]
+    if: |
+      always() &&
+      needs.publish-android.result != 'failure' &&
+      needs.publish-ios.result != 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate inputs
+        run: |
+          if [ -z "${{ github.event.inputs.rn_version }}" ]; then
+            echo "::error::rn_version is required (rn-dist is rebuilt every run)"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          draft: true
+          node-version: '20'
+
+      - name: Bump airborne-react-native version
+        working-directory: airborne-react-native
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            p.version = '${{ github.event.inputs.rn_version }}';
+            fs.writeFileSync('./package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          grep '"version"' package.json | head -1
+
+      - name: Update Android SDK dep coordinate
+        if: ${{ github.event.inputs.android_version != '' }}
+        working-directory: airborne-react-native
+        run: |
+          sed -i 's|api "com.movingtech:airborne:[^"]*"|api "com.movingtech:airborne:${{ github.event.inputs.android_version }}"|' android/build.gradle
+          grep 'com.movingtech:airborne' android/build.gradle
+
+      - name: Update iOS Airborne pod dep
+        if: ${{ github.event.inputs.ios_version != '' }}
+        working-directory: airborne-react-native
+        run: |
+          sed -i 's|s.dependency "Airborne", "[^"]*"|s.dependency "Airborne", "${{ github.event.inputs.ios_version }}"|' AirborneReact.podspec
+          grep 's.dependency "Airborne"' AirborneReact.podspec
+
+      - name: Rewrite local airborne-devkit dep to npm
+        working-directory: airborne-react-native
+        run: |
+          sed -i 's|"airborne-devkit": "file:../airborne_cli"|"airborne-devkit": "*"|' package.json
+
+      - name: Install deps
+        working-directory: airborne-react-native
+        run: npm install --no-audit --no-fund
+
+      - name: Build RN plugin (bob build → produces lib/)
+        working-directory: airborne-react-native
+        run: npx bob build
+
+      - name: Remove prepare script from package.json
+        working-directory: airborne-react-native
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            if (p.scripts && p.scripts.prepare) delete p.scripts.prepare;
+            fs.writeFileSync('./package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+
+      - name: Stage built plugin in temp dir
+        run: |
+          BRANCH_DIR=$(mktemp -d)
+          rsync -a \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='example' \
+            --exclude='.yarn' \
+            --exclude='.turbo' \
+            airborne-react-native/ "$BRANCH_DIR/"
+          echo "BRANCH_DIR=$BRANCH_DIR" >> "$GITHUB_ENV"
+          ls -la "$BRANCH_DIR"
+          ls -la "$BRANCH_DIR/lib"
+
+      - name: Force-push to rn-dist branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$BRANCH_DIR"
+          git init -b rn-dist
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          git add -A
+          git commit -m "build: rn-dist v${{ github.event.inputs.rn_version }}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin rn-dist
+
+  commit-back:
+    needs: [publish-android, publish-ios, publish-rn-dist]
+    if: |
+      always() &&
+      (needs.publish-android.result == 'success'
+       || needs.publish-ios.result == 'success'
+       || needs.publish-rn-dist.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply version bumps
+        env:
+          ANDROID_RESULT: ${{ needs.publish-android.result }}
+          IOS_RESULT: ${{ needs.publish-ios.result }}
+          RNDIST_RESULT: ${{ needs.publish-rn-dist.result }}
+          ANDROID_VERSION: ${{ github.event.inputs.android_version }}
+          IOS_VERSION: ${{ github.event.inputs.ios_version }}
+          RN_VERSION: ${{ github.event.inputs.rn_version }}
+        run: |
+          set -eu
+
+          if [ "$ANDROID_RESULT" = "success" ]; then
+            sed -i "s/^airborneVersion=.*/airborneVersion=$ANDROID_VERSION/" airborne_sdk_android/version.properties
+          fi
+
+          if [ "$IOS_RESULT" = "success" ]; then
+            # Note: bumping only the version line. The :http source URL rewrite
+            # done in publish-ios stays runner-local — derivable from the version,
+            # no need to commit.
+            sed -i "s/s.version[[:space:]]*=[[:space:]]*'.*'/s.version          = '$IOS_VERSION'/" airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec
+          fi
+
+          if [ "$RNDIST_RESULT" = "success" ]; then
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('airborne-react-native/package.json', 'utf8'));
+              p.version = '$RN_VERSION';
+              fs.writeFileSync('airborne-react-native/package.json', JSON.stringify(p, null, 2) + '\n');
+            "
+            # Mirror the rn-dist job's conditional dep updates: only touch a
+            # platform's coord when its version was supplied AND its job didn't fail.
+            if [ -n "$ANDROID_VERSION" ] && [ "$ANDROID_RESULT" != "failure" ]; then
+              sed -i 's|api "com.movingtech:airborne:[^"]*"|api "com.movingtech:airborne:'"$ANDROID_VERSION"'"|' airborne-react-native/android/build.gradle
+            fi
+            if [ -n "$IOS_VERSION" ] && [ "$IOS_RESULT" != "failure" ]; then
+              sed -i 's|s.dependency "Airborne", "[^"]*"|s.dependency "Airborne", "'"$IOS_VERSION"'"|' airborne-react-native/AirborneReact.podspec
+            fi
+          fi
+
+      - name: Commit and push to source branch
+        env:
+          ANDROID_RESULT: ${{ needs.publish-android.result }}
+          IOS_RESULT: ${{ needs.publish-ios.result }}
+          RNDIST_RESULT: ${{ needs.publish-rn-dist.result }}
+          ANDROID_VERSION: ${{ github.event.inputs.android_version }}
+          IOS_VERSION: ${{ github.event.inputs.ios_version }}
+          RN_VERSION: ${{ github.event.inputs.rn_version }}
+        run: |
+          set -eu
+
+          if git diff --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name  "github-actions[bot]"
+
+          parts=""
+          [ "$ANDROID_RESULT" = "success" ] && parts="$parts android@$ANDROID_VERSION"
+          [ "$IOS_RESULT" = "success" ]     && parts="$parts ios@$IOS_VERSION"
+          [ "$RNDIST_RESULT" = "success" ]  && parts="$parts rn@$RN_VERSION"
+
+          git add airborne_sdk_android/version.properties \
+                  airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec \
+                  airborne-react-native/package.json \
+                  airborne-react-native/android/build.gradle \
+                  airborne-react-native/AirborneReact.podspec
+          git commit -m "release:$parts"
+
+          # Rebase in case unrelated commits landed during the workflow run.
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

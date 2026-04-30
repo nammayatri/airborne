@@ -261,35 +261,54 @@ public class FileProviderService {
     }
 
     boolean copyFile(File from, File to) {
+        final TrackerCallback tracker = otaServices.getTrackerCallback();
+        File parent = to.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        File staging = new File(parent, "." + to.getName() + ".tmp-" + System.nanoTime());
         try {
             Log.d(LOG_TAG, "copyFile: " + from.getAbsolutePath() + "   " + to.getAbsolutePath());
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    Files.copy(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    return true;
-                } catch (Exception e) {
-                    otaServices.getTrackerCallback().trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE, "Files.copy failed: " + from.getName(), e);
-                }
-            }
-
-            try (InputStream in = new FileInputStream(from)) {
-                try (OutputStream out = new FileOutputStream(to)) {
-                    byte[] buffer = new byte[1024];
+                Files.copy(from.toPath(), staging.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                try (FileInputStream in = new FileInputStream(from);
+                     FileOutputStream out = new FileOutputStream(staging)) {
+                    byte[] buffer = new byte[8192];
                     int read;
                     while ((read = in.read(buffer)) != -1) {
                         out.write(buffer, 0, read);
                     }
-                    // write the output file (You have now copied the file)
-                    out.flush();
+                    out.getFD().sync();
+                }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Files.move(staging.toPath(), to.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                if (to.exists() && !to.delete()) {
+                    tracker.trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE,
+                            "Failed to delete existing destination: " + to.getName(), new IOException("delete returned false"));
+                    staging.delete();
+                    return false;
+                }
+                if (!staging.renameTo(to)) {
+                    tracker.trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE,
+                            "renameTo failed: " + to.getName(), new IOException("renameTo returned false"));
+                    staging.delete();
+                    return false;
                 }
             }
             return true;
         } catch (FileNotFoundException e) {
-            otaServices.getTrackerCallback().trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE, "File not found: " + from.getName(), e);
+            tracker.trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE, "File not found: " + from.getName(), e);
+            staging.delete();
             return false;
         } catch (Exception e) {
-            otaServices.getTrackerCallback().trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE, "Exception: " + from.getName(), e);
+            tracker.trackException(LogCategory.ACTION, LogSubCategory.Action.SYSTEM, Labels.System.FILE_PROVIDER_SERVICE, "Exception: " + from.getName(), e);
+            staging.delete();
             return false;
         }
     }

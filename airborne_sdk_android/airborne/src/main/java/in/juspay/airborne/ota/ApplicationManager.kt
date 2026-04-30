@@ -19,10 +19,12 @@ import android.util.Log
 import `in`.juspay.airborne.LazyDownloadCallback
 import `in`.juspay.airborne.network.NetUtils
 import `in`.juspay.airborne.network.OTANetUtils
+import `in`.juspay.airborne.ota.Constants.APP_DIR
 import `in`.juspay.airborne.ota.Constants.CONFIG_FILE_NAME
 import `in`.juspay.airborne.ota.Constants.DEFAULT_CONFIG
 import `in`.juspay.airborne.ota.Constants.DEFAULT_PKG
 import `in`.juspay.airborne.ota.Constants.DEFAULT_RESOURCES
+import `in`.juspay.airborne.ota.Constants.INSTALL_MARKER_FILE_NAME
 import `in`.juspay.airborne.ota.Constants.PACKAGE_DIR_NAME
 import `in`.juspay.airborne.ota.Constants.PACKAGE_MANIFEST_FILE_NAME
 import `in`.juspay.airborne.ota.Constants.RC_VERSION_FILE_NAME
@@ -35,11 +37,14 @@ import `in`.juspay.airborne.constants.LogLevel
 import `in`.juspay.airborne.constants.LogSubCategory
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.lang.ref.WeakReference
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.Future
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.X509TrustManager
 
 class ApplicationManager(
     private val ctx: Context,
@@ -50,10 +55,15 @@ class ApplicationManager(
     private val onBootComplete: ((String) -> Unit)? = null,
     private val fromAirborne: Boolean = true
 ) {
+    @Volatile
     var shouldUpdate = true
     private lateinit var netUtils: NetUtils
+    @Volatile
     private var releaseConfig: ReleaseConfig? = null
-    private var applicationContent = ""
+    @Volatile
+    private var loadedPackageVersion: String? = null
+    @Volatile
+    private var lastUpdateResult: UpdateResult? = null
     private val loadWaitTask = WaitTask()
     private val indexPathWaitTask = WaitTask()
     private val workspace = otaServices.workspace
@@ -61,6 +71,50 @@ class ApplicationManager(
     private var indexFolderPath = ""
     private var sessionId: String? = null
     private var rcCallback: ReleaseConfigCallback? = null
+
+    @Volatile
+    private var pendingSslConfig: Pair<SSLSocketFactory, X509TrustManager>? = null
+
+    /**
+     * Install a custom SSL socket factory + trust manager pair on the OTA
+     * network client. Used for mTLS / certificate pinning when fetching the
+     * release config and OTA assets.
+     *
+     * Safe to call before the SDK has performed its first OTA request — the
+     * config is queued and applied once the underlying NetUtils is created.
+     */
+    fun setSslConfig(sslSocketFactory: SSLSocketFactory, trustManager: X509TrustManager) {
+        if (::netUtils.isInitialized) {
+            netUtils.setSslConfig(sslSocketFactory, trustManager)
+        } else {
+            pendingSslConfig = sslSocketFactory to trustManager
+        }
+    }
+
+    private fun applyPendingSslConfig() {
+        pendingSslConfig?.let { (sf, tm) ->
+            netUtils.setSslConfig(sf, tm)
+            pendingSslConfig = null
+        }
+    }
+
+    /**
+     * Register or refresh this client's context in the shared CONTEXT_MAP.
+     * @return Pair of (initialized: whether another context already existed, contextRef: the lock object)
+     */
+    private fun ensureContext(clientId: String): Pair<Boolean, Any> {
+        val newRef = WeakReference(ctx)
+        val currentRef = CONTEXT_MAP[clientId]
+        val initialized = if (currentRef == null) {
+            CONTEXT_MAP.putIfAbsent(clientId, newRef) != null
+        } else if (currentRef.get() == null) {
+            !CONTEXT_MAP.replace(clientId, currentRef, newRef)
+        } else {
+            true
+        }
+        val contextRef = CONTEXT_MAP[clientId] ?: newRef
+        return Pair(initialized, contextRef)
+    }
 
     fun loadApplication(
         unSanitizedClientId: String,
@@ -73,16 +127,7 @@ class ApplicationManager(
             val startTime = System.currentTimeMillis()
             try {
                 if (releaseConfig == null) {
-                    val newRef = WeakReference(ctx)
-                    val currentRef = CONTEXT_MAP[clientId]
-                    val initialized = if (currentRef == null) {
-                        CONTEXT_MAP.putIfAbsent(clientId, newRef) != null
-                    } else if (currentRef.get() == null) {
-                        !CONTEXT_MAP.replace(clientId, currentRef, newRef)
-                    } else {
-                        true
-                    }
-                    val contextRef = CONTEXT_MAP[clientId] ?: newRef
+                    val (initialized, contextRef) = ensureContext(clientId)
                     releaseConfig = readReleaseConfig(contextRef)
                     if (shouldUpdate) {
                         releaseConfig =
@@ -91,21 +136,36 @@ class ApplicationManager(
                         Log.d(TAG, "Updates disabled, running w/o updating.")
                     }
                 }
-                val rc = releaseConfig!!
-                indexFolderPath = getIndexFilePath(rc.pkg.index?.filePath ?: "")
-                indexPathWaitTask.complete()
-                val js = readSplit(rc.pkg.index?.filePath ?: "")
-                if (js.isEmpty()) {
-                    throw IllegalStateException("index split is empty.")
+                val rc = releaseConfig
+                if (rc == null) {
+                    Log.w(TAG, "No release config available (no disk cache, no bundled asset). Skipping load.")
+                } else {
+                    val resolvedIndexPath = getIndexFilePath(rc.pkg.index?.filePath ?: "")
+                    if (resolvedIndexPath.isEmpty()) {
+                        indexPathWaitTask.complete()
+                        throw IllegalStateException("index split not found on disk.")
+                    }
+                    val internalPkgPresent =
+                        readFromInternalStorage(PACKAGE_MANIFEST_FILE_NAME).isNotEmpty()
+                    if (internalPkgPresent) {
+                        val markerVersion = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
+                        if (markerVersion != rc.pkg.version) {
+                            otaServices.fileProviderService.updateFile(
+                                "$APP_DIR/$PACKAGE_MANIFEST_FILE_NAME", ByteArray(0)
+                            )
+                            indexPathWaitTask.complete()
+                            throw IllegalStateException(
+                                "install marker mismatch (pkg=${rc.pkg.version} marker=$markerVersion); discarded internal pkg.json."
+                            )
+                        }
+                    }
+                    indexFolderPath = resolvedIndexPath
+                    indexPathWaitTask.complete()
+                    trackBoot(rc, startTime)
+                    Log.d(TAG, "Loading package version: ${rc.pkg.version}")
+                    loadedPackageVersion = rc.pkg.version
+                    loadWaitTask.complete()
                 }
-                trackBoot(rc, startTime)
-                Log.d(TAG, "Loading package version: ${rc.pkg.version}")
-                val headerJs = """
-                window.document.title="${rc.pkg.name}";
-                window.RELEASE_CONFIG=${rc.serialize()};
-                """.trimIndent()
-                applicationContent = headerJs + js
-                loadWaitTask.complete()
             } catch (e: Exception) {
                 Log.e(TAG, "Critical exception while loading app! $e")
                 trackError(
@@ -122,19 +182,8 @@ class ApplicationManager(
         }
     }
 
-    fun getApplicationContent(): String {
-        loadWaitTask.get()
-        return applicationContent
-    }
-
     fun getIndexBundlePath(): String {
-        while (!indexPathWaitTask.isDone) {
-            try {
-                (ctx as java.lang.Object).wait()
-            } catch (e: Exception) {
-                // ignore
-            }
-        }
+        indexPathWaitTask.get()
         return indexFolderPath
     }
 
@@ -150,12 +199,15 @@ class ApplicationManager(
         clientId: String,
         initialized: Boolean,
         fileLock: Any,
-        lazyDownloadCallback: LazyDownloadCallback? = null
+        lazyDownloadCallback: LazyDownloadCallback? = null,
+        packageTimeoutOverride: Long = 0L,
+        releaseConfigTimeoutOverride: Long = 0L
     ): ReleaseConfig? {
         val startTime = System.currentTimeMillis()
         val url = if (releaseConfigTemplateUrl == "") rcCallback?.getReleaseConfig(false) else releaseConfigTemplateUrl
         netUtils = OTANetUtils(ctx, clientId, otaServices.cleanUpValue)
         netUtils.setTrackMetrics(metricsEndPoint != null)
+        applyPendingSslConfig()
         val newTask =
             UpdateTask(
                 url ?: releaseConfigTemplateUrl,
@@ -166,7 +218,9 @@ class ApplicationManager(
                 netUtils,
                 rcHeaders,
                 lazyDownloadCallback,
-                fromAirborne
+                fromAirborne,
+                packageTimeoutOverride,
+                releaseConfigTimeoutOverride
             )
         val runningTask = RUNNING_UPDATE_TASKS.putIfAbsent(clientId, newTask) ?: newTask
         if (runningTask == newTask) {
@@ -195,6 +249,7 @@ class ApplicationManager(
             Log.d(TAG, "Update task already running for '$clientId'.")
         }
         val uresult = runningTask.await(tracker)
+        lastUpdateResult = uresult
         trackUpdateResult(uresult)
         val rc = when (uresult) {
             is UpdateResult.Ok -> uresult.releaseConfig
@@ -209,7 +264,7 @@ class ApplicationManager(
                     )
                     runningTask.awaitOnFinish()
                     releaseConfigTemplateUrl = rcCallback?.getReleaseConfig(true) ?: releaseConfigTemplateUrl
-                    tryUpdate(clientId, true, fileLock, lazyDownloadCallback)
+                    tryUpdate(clientId, true, fileLock, lazyDownloadCallback, packageTimeoutOverride)
                 } else {
                     releaseConfig
                 }
@@ -353,7 +408,11 @@ class ApplicationManager(
                     .map { readFromInternalStorage(it) }
 
                 val bundledRC = if (listOf(configString, pkgString, resString).any { it.isEmpty() }) {
-                    ReleaseConfig.deSerialize(otaServices.fileProviderService.readFromAssets("release_config.json")).getOrNull()
+                    val assetContent: String? = try {
+                        otaServices.fileProviderService.readFromAssets("release_config.json")
+                    } catch (_: Exception) { null }
+                    if (assetContent.isNullOrEmpty()) null
+                    else ReleaseConfig.deSerialize(assetContent).getOrNull()
                 } else {
                     null
                 }
@@ -421,6 +480,187 @@ class ApplicationManager(
 
     fun readReleaseConfig(): String {
         return releaseConfig?.serialize() ?: ""
+    }
+
+    fun getCurrentPackageVersion(): String {
+        return releaseConfig?.pkg?.version ?: ""
+    }
+
+    /**
+     * True when a newer package has been committed to disk (install marker
+     * written by the OTA worker) but the running JS bundle is still the one
+     * loaded at boot. Hosts should check this on `MainActivity.onCreate` (the
+     * one hook that fires when an OEM keeps the process alive across "kill
+     * from recents") and trigger a process restart so the new bundle takes
+     * effect — V8 has no API to swap the loaded JS in place.
+     */
+    fun hasPendingBundleUpdate(): Boolean {
+        val loaded = loadedPackageVersion ?: return false
+        val onDisk = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
+            .takeIf { it.isNotEmpty() } ?: return false
+        return loaded != onDisk
+    }
+
+    private sealed class RCFetchResult {
+        data class Ok(val body: String) : RCFetchResult()
+        object NotFound : RCFetchResult()
+        data class Error(val msg: String) : RCFetchResult()
+    }
+
+    /**
+     * Check if an OTA update is available by comparing the local package version
+     * with the server's latest release config.
+     *
+     * @return JSON string: { available, currentVersion, serverVersion, mandatory, error? }
+     */
+    fun checkForUpdate(): String {
+        val currentVersion = getCurrentPackageVersion()
+        try {
+            when (val result = fetchLatestRCInternal()) {
+                is RCFetchResult.NotFound ->
+                    return JSONObject()
+                        .put("available", false)
+                        .put("currentVersion", currentVersion)
+                        .put("serverVersion", "")
+                        .put("mandatory", false)
+                        .toString()
+                is RCFetchResult.Error ->
+                    return updateCheckResult(currentVersion, error = result.msg)
+                is RCFetchResult.Ok -> {
+                    val serverRC = JSONObject(result.body)
+                    val serverVersion = serverRC.getJSONObject("package").getString("version")
+                    val mandatory = serverRC.getJSONObject("config")
+                        .optJSONObject("properties")
+                        ?.optBoolean("mandatory", false) ?: false
+
+                    val currentVersionInt: Long? = if (currentVersion.isEmpty()) 0L else currentVersion.toLongOrNull()
+                    val serverVersionInt: Long? = serverVersion.toLongOrNull()
+
+                    if (currentVersionInt == null || serverVersionInt == null) {
+                        Log.w(TAG, "Version parse failure: current='$currentVersion', server='$serverVersion'")
+                        return JSONObject()
+                            .put("available", false)
+                            .put("currentVersion", currentVersion)
+                            .put("serverVersion", serverVersion)
+                            .put("mandatory", mandatory)
+                            .put("error", "Non-numeric version: current='$currentVersion', server='$serverVersion'")
+                            .toString()
+                    }
+
+                    return JSONObject()
+                        .put("available", serverVersionInt > currentVersionInt)
+                        .put("currentVersion", currentVersion)
+                        .put("serverVersion", serverVersion)
+                        .put("mandatory", mandatory)
+                        .toString()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "checkForUpdate failed", e)
+            return updateCheckResult(currentVersion, error = e.message ?: "Unknown error")
+        }
+    }
+
+    private fun updateCheckResult(currentVersion: String, error: String): String {
+        return JSONObject()
+            .put("available", false)
+            .put("currentVersion", currentVersion)
+            .put("serverVersion", "")
+            .put("mandatory", false)
+            .put("error", error)
+            .toString()
+    }
+
+    /**
+     * Fetch the latest release config from the server without triggering any download.
+     * Uses the SDK's existing network infrastructure (connection pooling, headers, caching).
+     * @return Serialized JSON of the server's release config, or null on failure.
+     *         Note: also returns null for HTTP 404 (no applicable release). Callers that
+     *         need to distinguish "no release" from "transient failure" should use the
+     *         internal sealed-result path.
+     */
+    fun fetchLatestReleaseConfig(): String? = when (val r = fetchLatestRCInternal()) {
+        is RCFetchResult.Ok -> r.body
+        else -> null
+    }
+
+    private fun fetchLatestRCInternal(): RCFetchResult {
+        return try {
+            val clientId = sanitizeClientId(otaServices.clientId ?: return RCFetchResult.Error("Client ID not set"))
+            if (!::netUtils.isInitialized) {
+                netUtils = OTANetUtils(ctx, clientId, otaServices.cleanUpValue)
+                applyPendingSslConfig()
+            }
+            val headers = mutableMapOf<String, String>("cache-control" to "no-cache")
+            if (!rcHeaders.isNullOrEmpty()) {
+                val sortedHeaders = rcHeaders.toSortedMap()
+                headers["x-dimension"] = sortedHeaders.entries.joinToString(";") { "${it.key}=${it.value}" }
+            }
+            val url = if (releaseConfigTemplateUrl == "") rcCallback?.getReleaseConfig(false) else releaseConfigTemplateUrl
+            val resp = netUtils.doGet(url ?: releaseConfigTemplateUrl, headers, null, null, null)
+            resp.use {
+                val body = it.body()
+                when {
+                    it.isSuccessful && body != null -> RCFetchResult.Ok(body.string())
+                    it.code() == 404 -> RCFetchResult.NotFound
+                    else -> RCFetchResult.Error("HTTP ${it.code()}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchLatestReleaseConfig failed", e)
+            RCFetchResult.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Download and install the latest OTA update on-demand.
+     * Reuses the same download/install infrastructure as boot-time updates.
+     *
+     * @param timeoutMs Maximum time to wait for the download (default 5 minutes).
+     * @param onComplete Called with true on success, false on failure.
+     */
+    fun downloadUpdate(
+        timeoutMs: Long = 600_000L,
+        onComplete: (success: Boolean) -> Unit
+    ) {
+        doAsync {
+            try {
+                val clientId = sanitizeClientId(otaServices.clientId ?: "")
+                val (initialized, contextRef) = ensureContext(clientId)
+
+                if (releaseConfig == null) {
+                    releaseConfig = readReleaseConfig(contextRef)
+                }
+
+                val versionBefore = releaseConfig?.pkg?.version
+
+                val updatedRC = tryUpdate(clientId, initialized, contextRef, null, timeoutMs, timeoutMs)
+
+                if (updatedRC != null) {
+                    releaseConfig = updatedRC
+                    indexFolderPath = getIndexFilePath(updatedRC.pkg.index?.filePath ?: "")
+                }
+
+                val result = lastUpdateResult
+                val success = updatedRC != null && when (result) {
+                    is UpdateResult.Ok, UpdateResult.NA -> true
+                    null,
+                    is UpdateResult.Error,
+                    UpdateResult.ReleaseConfigFetchTimeout,
+                    is UpdateResult.PackageUpdateTimeout -> false
+                }
+                val versionAfter = updatedRC?.pkg?.version
+                Log.d(
+                    TAG,
+                    "downloadUpdate: success=$success updateResult=${result?.javaClass?.simpleName} " +
+                        "versionBefore=$versionBefore versionAfter=$versionAfter"
+                )
+                onComplete(success)
+            } catch (e: Exception) {
+                Log.e(TAG, "downloadUpdate failed", e)
+                onComplete(false)
+            }
+        }
     }
 
     private fun trackUpdateResult(updateResult: UpdateResult) {
