@@ -144,6 +144,7 @@ def kotlin_version = getExtOrDefault("kotlinVersion")
 dependencies {
     implementation "com.facebook.react:react-android"
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "com.jakewharton:process-phoenix:3.0.0"
 
     // Airborne SDK dependency
     api "com.movingtech:airborne:0.0.1"

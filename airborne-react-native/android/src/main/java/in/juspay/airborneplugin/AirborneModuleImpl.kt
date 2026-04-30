@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.Log
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.Promise
+import com.jakewharton.processphoenix.ProcessPhoenix
 import `in`.juspay.airborne.utils.OTAUtils
 
 /**
@@ -99,17 +100,7 @@ class AirborneModuleImpl(private val reactContext: ReactApplicationContext) {
 
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
-                    val context = reactContext.applicationContext
-                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                    if (intent != null) {
-                        intent.addFlags(
-                            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        )
-                        context.startActivity(intent)
-                        reactContext.currentActivity?.finishAffinity()
-                        android.os.Process.killProcess(android.os.Process.myPid())
-                    }
+                    ProcessPhoenix.triggerRebirth(reactContext.applicationContext)
                 } catch (e: Exception) {
                     Log.e("AIRBORNE_ERROR", "Failed to reload app", e)
                 }

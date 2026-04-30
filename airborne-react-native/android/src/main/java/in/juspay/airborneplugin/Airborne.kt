@@ -3,6 +3,7 @@ package `in`.juspay.airborneplugin
 import android.content.Context
 import android.util.Log
 import androidx.annotation.Keep
+import com.jakewharton.processphoenix.ProcessPhoenix
 import `in`.juspay.airborne.HyperOTAServices
 import `in`.juspay.airborne.LazyDownloadCallback
 import `in`.juspay.airborne.TrackerCallback
@@ -241,6 +242,30 @@ class Airborne(
         @JvmStatic
         fun triggerBackgroundDownload(context: Context, namespace: String) {
             OTADownloadWorker.enqueue(context, namespace)
+        }
+
+        /**
+         * If a newer bundle is committed to disk but the running JS in V8
+         * is still the boot-time one, kill the process and relaunch via
+         * ProcessPhoenix so the new bundle takes effect on the next boot.
+         *
+         * @return true if a restart was triggered, false otherwise.
+         */
+        @JvmStatic
+        fun applyPendingBundleUpdate(context: Context, namespace: String): Boolean {
+            val airborne = airborneObjectMap[namespace] ?: return false
+            return try {
+                if (airborne.hasPendingBundleUpdate()) {
+                    Log.i(TAG, "Pending bundle update for '$namespace'; restarting process via ProcessPhoenix")
+                    ProcessPhoenix.triggerRebirth(context)
+                    true
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "applyPendingBundleUpdate failed", e)
+                false
+            }
         }
     }
 }
