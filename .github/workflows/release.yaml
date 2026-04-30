@@ -246,6 +246,7 @@ jobs:
           rsync -a \
             --exclude='node_modules' \
             --exclude='.git' \
+            --exclude='.github' \
             --exclude='example' \
             --exclude='.yarn' \
             --exclude='.turbo' \
@@ -256,7 +257,7 @@ jobs:
 
       - name: Force-push to rn-dist branch
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COCOAPODS_SPEC_TOKEN }}
         run: |
           cd "$BRANCH_DIR"
           git init -b rn-dist
