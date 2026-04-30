@@ -1,6 +1,6 @@
 {
   "name": "airborne-react-native",
-  "version": "0.33.0-xota.test.2",
+  "version": "0.0.1",
   "description": "Airborne",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
