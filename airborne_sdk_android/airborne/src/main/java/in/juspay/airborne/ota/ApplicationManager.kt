@@ -483,7 +483,7 @@ class ApplicationManager(
     }
 
     fun getCurrentPackageVersion(): String {
-        return releaseConfig?.pkg?.version ?: ""
+        return loadedPackageVersion ?: releaseConfig?.pkg?.version ?: ""
     }
 
     /**
@@ -514,18 +514,18 @@ class ApplicationManager(
      * @return JSON string: { available, currentVersion, serverVersion, mandatory, error? }
      */
     fun checkForUpdate(): String {
-        val currentVersion = getCurrentPackageVersion()
+        val baseline = installedVersionOnDisk()
         try {
             when (val result = fetchLatestRCInternal()) {
                 is RCFetchResult.NotFound ->
                     return JSONObject()
                         .put("available", false)
-                        .put("currentVersion", currentVersion)
+                        .put("currentVersion", baseline)
                         .put("serverVersion", "")
                         .put("mandatory", false)
                         .toString()
                 is RCFetchResult.Error ->
-                    return updateCheckResult(currentVersion, error = result.msg)
+                    return updateCheckResult(baseline, error = result.msg)
                 is RCFetchResult.Ok -> {
                     val serverRC = JSONObject(result.body)
                     val serverVersion = serverRC.getJSONObject("package").getString("version")
@@ -533,23 +533,23 @@ class ApplicationManager(
                         .optJSONObject("properties")
                         ?.optBoolean("mandatory", false) ?: false
 
-                    val currentVersionInt: Long? = if (currentVersion.isEmpty()) 0L else currentVersion.toLongOrNull()
+                    val baselineInt: Long? = if (baseline.isEmpty()) 0L else baseline.toLongOrNull()
                     val serverVersionInt: Long? = serverVersion.toLongOrNull()
 
-                    if (currentVersionInt == null || serverVersionInt == null) {
-                        Log.w(TAG, "Version parse failure: current='$currentVersion', server='$serverVersion'")
+                    if (baselineInt == null || serverVersionInt == null) {
+                        Log.w(TAG, "Version parse failure: current='$baseline', server='$serverVersion'")
                         return JSONObject()
                             .put("available", false)
-                            .put("currentVersion", currentVersion)
+                            .put("currentVersion", baseline)
                             .put("serverVersion", serverVersion)
                             .put("mandatory", mandatory)
-                            .put("error", "Non-numeric version: current='$currentVersion', server='$serverVersion'")
+                            .put("error", "Non-numeric version: current='$baseline', server='$serverVersion'")
                             .toString()
                     }
 
                     return JSONObject()
-                        .put("available", serverVersionInt > currentVersionInt)
-                        .put("currentVersion", currentVersion)
+                        .put("available", serverVersionInt > baselineInt)
+                        .put("currentVersion", baseline)
                         .put("serverVersion", serverVersion)
                         .put("mandatory", mandatory)
                         .toString()
@@ -557,9 +557,32 @@ class ApplicationManager(
             }
         } catch (e: Exception) {
             Log.e(TAG, "checkForUpdate failed", e)
-            return updateCheckResult(currentVersion, error = e.message ?: "Unknown error")
+            return updateCheckResult(baseline, error = e.message ?: "Unknown error")
         }
     }
+
+    /**
+     * Highest package version known to be committed on disk: the install
+     * marker if present, otherwise the boot-time loaded version. Used as
+     * the baseline for "is the server offering something newer than what
+     * we already have".
+     */
+    private fun installedVersionOnDisk(): String {
+        val marker = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
+        if (marker.isNotEmpty()) return marker
+        return loadedPackageVersion ?: releaseConfig?.pkg?.version ?: ""
+    }
+
+    /**
+     * Strict read of the install marker. Returns empty string if no install
+     * has ever committed (no fallback to loaded/bundled version). Used by
+     * `OTADownloadWorker` to detect whether *this run* installed something
+     * new — snapshot before/after the download and compare — so the silent
+     * process kill only fires when an actual bundle was committed, not when
+     * the worker had nothing to do (NA).
+     */
+    internal fun readInstallMarkerVersion(): String =
+        readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
 
     private fun updateCheckResult(currentVersion: String, error: String): String {
         return JSONObject()
@@ -623,6 +646,12 @@ class ApplicationManager(
         timeoutMs: Long = 600_000L,
         onComplete: (success: Boolean) -> Unit
     ) {
+        if (hasPendingBundleUpdate()) {
+            Log.d(TAG, "downloadUpdate: pending update already on disk; skipping re-download")
+            onComplete(true)
+            return
+        }
+
         doAsync {
             try {
                 val clientId = sanitizeClientId(otaServices.clientId ?: "")
@@ -632,14 +661,15 @@ class ApplicationManager(
                     releaseConfig = readReleaseConfig(contextRef)
                 }
 
-                val versionBefore = releaseConfig?.pkg?.version
+                val savedReleaseConfig = releaseConfig
+                val savedIndexFolderPath = indexFolderPath
+
+                val versionBefore = savedReleaseConfig?.pkg?.version
 
                 val updatedRC = tryUpdate(clientId, initialized, contextRef, null, timeoutMs, timeoutMs)
 
-                if (updatedRC != null) {
-                    releaseConfig = updatedRC
-                    indexFolderPath = getIndexFilePath(updatedRC.pkg.index?.filePath ?: "")
-                }
+                releaseConfig = savedReleaseConfig
+                indexFolderPath = savedIndexFolderPath
 
                 val result = lastUpdateResult
                 val success = updatedRC != null && when (result) {

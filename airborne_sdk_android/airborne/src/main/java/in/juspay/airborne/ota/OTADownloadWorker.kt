@@ -1,6 +1,9 @@
 package `in`.juspay.airborne.ota
 
+import android.app.ActivityManager
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -19,6 +22,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import android.os.Process as AndroidProcess
 
 /**
  * WorkManager worker for background OTA bundle downloads.
@@ -48,18 +52,67 @@ class OTADownloadWorker(
 
         Log.d(TAG, "Starting background OTA download for namespace: $namespace (attempt ${runAttemptCount + 1}/$MAX_ATTEMPTS)")
 
-        try {
-            val config = readWorkerConfig(applicationContext, namespace)
-            if (config == null) {
-                Log.w(TAG, "No persisted worker config for '$namespace'. Airborne has never been initialized on this device. Giving up.")
-                return@withContext Result.failure()
-            }
+        val config = readWorkerConfig(applicationContext, namespace)
+        if (config == null) {
+            Log.w(TAG, "No persisted worker config for '$namespace'. Airborne has never been initialized on this device. Giving up.")
+            return@withContext Result.failure()
+        }
 
-            val manager = buildEphemeralManager(applicationContext, namespace, config)
+        val manager = buildEphemeralManager(applicationContext, namespace, config)
+
+        val markerBefore = manager.readInstallMarkerVersion()
+
+        val result = try {
             downloadWithManager(manager)
         } catch (e: Exception) {
             Log.e(TAG, "Background download threw for '$namespace'", e)
             retryOrGiveUp("uncaught exception")
+        }
+
+        val markerAfter = manager.readInstallMarkerVersion()
+        val didInstall = markerAfter.isNotEmpty() && markerAfter != markerBefore
+        Log.d(TAG, "doWork finished: result=${result.javaClass.simpleName} markerBefore='$markerBefore' markerAfter='$markerAfter' didInstall=$didInstall")
+
+        if (result == Result.success() && didInstall) {
+            scheduleSilentKillIfBackground(applicationContext)
+        }
+
+        result
+    }
+
+    /**
+     * Posts a delayed kill to the main thread. The 500ms delay lets WorkManager
+     * commit the success state to disk before we die — without it, the work can
+     * be marked as KEEP_ALIVE_FAILED and retried unnecessarily. We re-check the
+     * foreground state at kill time in case the user opened the app in the
+     * intervening window.
+     */
+    private fun scheduleSilentKillIfBackground(context: Context) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (isAnyActivityVisible(context)) {
+                Log.d(TAG, "Skipping silent kill — an activity is visible; MainActivity guard will handle on next reopen")
+                return@postDelayed
+            }
+            Log.i(TAG, "OTA installed and no UI visible; killing process for clean cold-start on next launch")
+            AndroidProcess.killProcess(AndroidProcess.myPid())
+        }, KILL_DELAY_MS)
+    }
+
+    /**
+     * True iff this process currently has any user-visible UI. Uses the
+     * `RunningAppProcessInfo.importance` heuristic: anything below
+     * `IMPORTANCE_SERVICE` (300) implies an activity that the user can see.
+     * Defaults to true on failure so we err on the side of NOT killing.
+     */
+    private fun isAnyActivityVisible(context: Context): Boolean {
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return true
+            val processes = am.runningAppProcesses ?: return true
+            val mine = processes.find { it.pid == AndroidProcess.myPid() } ?: return true
+            mine.importance < ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE
+        } catch (e: Exception) {
+            Log.w(TAG, "isAnyActivityVisible check failed; assuming true", e)
+            true
         }
     }
 
@@ -160,6 +213,7 @@ class OTADownloadWorker(
         private const val WORK_TAG = "airborne_ota"
         private const val WORKER_CONFIG_KEY = "airborne_worker_config"
         private const val MAX_ATTEMPTS = 3
+        private const val KILL_DELAY_MS = 500L
 
         /**
          * Enqueue a background OTA download job.
