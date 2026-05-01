@@ -123,7 +123,8 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
         self.delegate = delegate;
         
         self.releaseConfigURL = [delegate getReleaseConfigURL];
-        
+        self.releaseConfigURL = [self appendStickyTossToURL:self.releaseConfigURL workspace:workspace];
+
         if ([self.delegate respondsToSelector:@selector(getReleaseConfigHeaders)]) {
             self.releaseConfigHeaders = [self.delegate getReleaseConfigHeaders];
         } else {
@@ -1035,6 +1036,22 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
 }
 
 # pragma mark - Manifest
+
+- (NSString *)appendStickyTossToURL:(NSString *)url workspace:(NSString *)workspace {
+    if (url == nil || url.length == 0) {
+        return url;
+    }
+    NSString *tossKey = [NSString stringWithFormat:@"airborne.toss.%@", workspace ?: @""];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *toss = [defaults stringForKey:tossKey];
+    if (toss == nil || toss.length == 0) {
+        toss = [[NSUUID UUID] UUIDString];
+        [defaults setObject:toss forKey:tossKey];
+    }
+    NSString *encoded = [toss stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSString *separator = ([url rangeOfString:@"?"].location != NSNotFound) ? @"&" : @"?";
+    return [NSString stringWithFormat:@"%@%@toss=%@", url, separator, encoded];
+}
 
 - (void)fetchReleaseConfigWithCompletionHandler:(AJPReleaseConfigCompletionHandler)completionHandler {
 
