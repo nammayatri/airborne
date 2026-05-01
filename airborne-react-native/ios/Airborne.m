@@ -11,34 +11,37 @@
 
 @implementation Airborne
 
-+ (instancetype)sharedInstanceWithNamespace:(NSString *)aNamespace {
-    static NSMutableDictionary<NSString *, Airborne *> *instances = nil;
-    static dispatch_queue_t syncQueue;
+static NSMutableDictionary<NSString *, Airborne *> *_airborneInstances = nil;
+static dispatch_queue_t _airborneSyncQueue = nil;
+
+static void AirborneEnsureRegistry(void) {
     static dispatch_once_t onceToken;
-    
-    // Initialize dictionary and queue once
     dispatch_once(&onceToken, ^{
-        instances = [NSMutableDictionary dictionary];
-        syncQueue = dispatch_queue_create("in.juspay.Airborne.singleton", DISPATCH_QUEUE_CONCURRENT);
+        _airborneInstances = [NSMutableDictionary dictionary];
+        _airborneSyncQueue = dispatch_queue_create("in.juspay.Airborne.singleton", DISPATCH_QUEUE_CONCURRENT);
     });
-    
+}
+
++ (instancetype)sharedInstanceWithNamespace:(NSString *)aNamespace {
+    AirborneEnsureRegistry();
+
     __block Airborne *instance = nil;
-    
+
     // Read existing instance (concurrent)
-    dispatch_sync(syncQueue, ^{
-        instance = instances[aNamespace];
+    dispatch_sync(_airborneSyncQueue, ^{
+        instance = _airborneInstances[aNamespace];
     });
-    
+
     if (instance == nil) {
         // Write new instance (barrier to prevent concurrent writes)
-        dispatch_barrier_sync(syncQueue, ^{
-            if (!instances[aNamespace]) {
-                instances[aNamespace] = [[self alloc] initWithNamespace:aNamespace];
+        dispatch_barrier_sync(_airborneSyncQueue, ^{
+            if (!_airborneInstances[aNamespace]) {
+                _airborneInstances[aNamespace] = [[self alloc] initWithNamespace:aNamespace];
             }
-            instance = instances[aNamespace];
+            instance = _airborneInstances[aNamespace];
         });
     }
-    
+
     return instance;
 }
 
@@ -54,6 +57,12 @@
     self = [super init];
     if (self) {
         self.airborne = [[AirborneServices alloc] initWithReleaseConfigURL:releaseConfigURL delegate:delegate ?: self];
+        NSString *ns = ([delegate respondsToSelector:@selector(namespace)] ? [delegate namespace] : nil) ?: @"default";
+        self.namespace = ns;
+        AirborneEnsureRegistry();
+        dispatch_barrier_sync(_airborneSyncQueue, ^{
+            _airborneInstances[ns] = self;
+        });
     }
     return self;
 }
