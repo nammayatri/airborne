@@ -142,29 +142,37 @@ class ApplicationManager(
                 } else {
                     val resolvedIndexPath = getIndexFilePath(rc.pkg.index?.filePath ?: "")
                     if (resolvedIndexPath.isEmpty()) {
-                        indexPathWaitTask.complete()
-                        throw IllegalStateException("index split not found on disk.")
-                    }
-                    val internalPkgPresent =
-                        readFromInternalStorage(PACKAGE_MANIFEST_FILE_NAME).isNotEmpty()
-                    if (internalPkgPresent) {
                         val markerVersion = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
-                        if (markerVersion != rc.pkg.version) {
-                            otaServices.fileProviderService.updateFile(
-                                "$APP_DIR/$PACKAGE_MANIFEST_FILE_NAME", ByteArray(0)
-                            )
+                        if (markerVersion.isEmpty()) {
+                            Log.i(TAG, "No OTA bundle installed yet; using bundled assets.")
+                        } else {
                             indexPathWaitTask.complete()
                             throw IllegalStateException(
-                                "install marker mismatch (pkg=${rc.pkg.version} marker=$markerVersion); discarded internal pkg.json."
+                                "index split not found on disk despite install_marker=$markerVersion."
                             )
                         }
+                    } else {
+                        val internalPkgPresent =
+                            readFromInternalStorage(PACKAGE_MANIFEST_FILE_NAME).isNotEmpty()
+                        if (internalPkgPresent) {
+                            val markerVersion = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
+                            if (markerVersion != rc.pkg.version) {
+                                otaServices.fileProviderService.updateFile(
+                                    "$APP_DIR/$PACKAGE_MANIFEST_FILE_NAME", ByteArray(0)
+                                )
+                                indexPathWaitTask.complete()
+                                throw IllegalStateException(
+                                    "install marker mismatch (pkg=${rc.pkg.version} marker=$markerVersion); discarded internal pkg.json."
+                                )
+                            }
+                        }
+                        indexFolderPath = resolvedIndexPath
+                        indexPathWaitTask.complete()
+                        trackBoot(rc, startTime)
+                        Log.d(TAG, "Loading package version: ${rc.pkg.version}")
+                        loadedPackageVersion = rc.pkg.version
+                        loadWaitTask.complete()
                     }
-                    indexFolderPath = resolvedIndexPath
-                    indexPathWaitTask.complete()
-                    trackBoot(rc, startTime)
-                    Log.d(TAG, "Loading package version: ${rc.pkg.version}")
-                    loadedPackageVersion = rc.pkg.version
-                    loadWaitTask.complete()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Critical exception while loading app! $e")
@@ -533,22 +541,10 @@ class ApplicationManager(
                         .optJSONObject("properties")
                         ?.optBoolean("mandatory", false) ?: false
 
-                    val baselineInt: Long? = if (baseline.isEmpty()) 0L else baseline.toLongOrNull()
-                    val serverVersionInt: Long? = serverVersion.toLongOrNull()
-
-                    if (baselineInt == null || serverVersionInt == null) {
-                        Log.w(TAG, "Version parse failure: current='$baseline', server='$serverVersion'")
-                        return JSONObject()
-                            .put("available", false)
-                            .put("currentVersion", baseline)
-                            .put("serverVersion", serverVersion)
-                            .put("mandatory", mandatory)
-                            .put("error", "Non-numeric version: current='$baseline', server='$serverVersion'")
-                            .toString()
-                    }
+                    val available = baseline.isEmpty() || baseline != serverVersion
 
                     return JSONObject()
-                        .put("available", serverVersionInt > baselineInt)
+                        .put("available", available)
                         .put("currentVersion", baseline)
                         .put("serverVersion", serverVersion)
                         .put("mandatory", mandatory)
