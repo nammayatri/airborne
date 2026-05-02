@@ -57,7 +57,7 @@ static void AirborneEnsureRegistry(void) {
     self = [super init];
     if (self) {
         self.airborne = [[AirborneServices alloc] initWithReleaseConfigURL:releaseConfigURL delegate:delegate ?: self];
-        NSString *ns = ([delegate respondsToSelector:@selector(namespace)] ? [delegate namespace] : nil) ?: @"default";
+        NSString *ns = ([(id)delegate respondsToSelector:@selector(namespace)] ? [delegate namespace] : nil) ?: @"default";
         self.namespace = ns;
         AirborneEnsureRegistry();
         dispatch_barrier_sync(_airborneSyncQueue, ^{
