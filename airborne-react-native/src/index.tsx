@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 
 const LINKING_ERROR =
   `The package 'airborne-react-native' doesn't seem to be linked. Make sure: \n\n` +
@@ -20,12 +20,9 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go\n';
 
-// @ts-expect-error
-const isTurboModuleEnabled = global.__turboModuleProxy != null;
-
-const AirborneModule = isTurboModuleEnabled
-  ? require('./NativeAirborne').default
-  : NativeModules.Airborne;
+const AirborneModule =
+  (TurboModuleRegistry && TurboModuleRegistry.get('Airborne')) ||
+  NativeModules.Airborne;
 
 const Airborne = AirborneModule
   ? AirborneModule
@@ -42,7 +39,10 @@ export function readReleaseConfig(nameSpace: string): Promise<string> {
   return Airborne.readReleaseConfig(nameSpace);
 }
 
-export function getFileContent(nameSpace: string, filePath: string): Promise<string> {
+export function getFileContent(
+  nameSpace: string,
+  filePath: string
+): Promise<string> {
   return Airborne.getFileContent(nameSpace, filePath);
 }
 

@@ -12,7 +12,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var reactNativeDelegate: ReactNativeDelegate?
     var reactNativeFactory: RCTReactNativeFactory?
     
-    private var airborne: Airborne?
+    private var airborne: AirborneInstance?
     
     func application(
         _ application: UIApplication,
@@ -31,7 +31,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     
     private func initializeHyperOTA() {
-        airborne = Airborne(releaseConfigURL: "https://airborne.sandbox.juspay.in/release/airborne-react-example/ios", delegate: self)
+        airborne = AirborneInstance(releaseConfigURL: "https://airborne.sandbox.juspay.in/release/airborne-react-example/ios", delegate: self)
         print("HyperOTA: Initialized successfully")
     }
 }

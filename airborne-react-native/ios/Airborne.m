@@ -1,7 +1,7 @@
 
 #import "Airborne.h"
 
-@interface Airborne() <AirborneDelegate>
+@interface AirborneInstance() <AirborneDelegate>
 
 @property (nonatomic, strong) NSString* namespace;
 @property (nonatomic, strong) AirborneServices* airborne;
@@ -9,9 +9,9 @@
 
 @end
 
-@implementation Airborne
+@implementation AirborneInstance
 
-static NSMutableDictionary<NSString *, Airborne *> *_airborneInstances = nil;
+static NSMutableDictionary<NSString *, AirborneInstance *> *_airborneInstances = nil;
 static dispatch_queue_t _airborneSyncQueue = nil;
 
 static void AirborneEnsureRegistry(void) {
@@ -25,7 +25,7 @@ static void AirborneEnsureRegistry(void) {
 + (instancetype)sharedInstanceWithNamespace:(NSString *)aNamespace {
     AirborneEnsureRegistry();
 
-    __block Airborne *instance = nil;
+    __block AirborneInstance *instance = nil;
 
     // Read existing instance (concurrent)
     dispatch_sync(_airborneSyncQueue, ^{
