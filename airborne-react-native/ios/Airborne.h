@@ -3,7 +3,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface Airborne : NSObject
+@interface AirborneInstance : NSObject
 
 + (instancetype)sharedInstanceWithNamespace:(NSString *)aNamespace;
 
