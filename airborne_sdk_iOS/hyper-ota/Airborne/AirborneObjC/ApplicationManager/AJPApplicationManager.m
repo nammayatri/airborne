@@ -1378,13 +1378,17 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
                 completion(YES, timeoutOccurred);
             } else if (timeoutOccurred || strongSelf.forceUpdate == false) {
                 // Timeout occurred or force update is false - never move to main, leave files in temp
+                
+                // On timeout with forceUpdate, persist temp marker now so next boot can promote synchronously
+                if (timeoutOccurred && strongSelf.forceUpdate) {
+                    [strongSelf updatePackageInTemp:newManifest];
+                }
                 [strongSelf.tracker trackInfo:@"downloads_completed_after_timeout"
                                         value:[@{@"timeoutOccurred": @(timeoutOccurred),
                                                  @"forceUpdate": @(strongSelf.forceUpdate),
                                                  @"failed_downloads": [failedDownloads allObjects],
                                                  @"all_successful": @(failedDownloads.count == 0),
                                                  @"time_taken": @([[NSDate date] timeIntervalSince1970] * 1000 - startTime)} mutableCopy]];
-                
                 // Not Failed, Timedout
                 completion(NO, YES);
             } else {
