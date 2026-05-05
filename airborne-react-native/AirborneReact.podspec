@@ -27,7 +27,7 @@ Pod::Spec.new do |s|
   s.authors      = package["author"]
 
   s.platforms    = { :ios => "12.0"}
-  s.source       = { :git => "https://github.com/PraveenGongada/airborne.git", :tag => "#{s.version}" }
+  s.source       = { :git => "https://github.com/nammayatri/airborne.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,cpp}"
   s.public_header_files = "ios/**/*.h"

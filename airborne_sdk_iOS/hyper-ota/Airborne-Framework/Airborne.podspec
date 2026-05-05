@@ -7,13 +7,13 @@ Hyper OTA empowers developers to effortlessly integrate Over-The-Air (OTA) updat
 Our primary focus is to provide robust, easy-to-use SDKs and plugins that streamline the update process directly within your client applications.
                        DESC
 
-  s.homepage         = 'https://github.com/PraveenGongada/airborne'
+  s.homepage         = 'https://github.com/nammayatri/airborne'
   s.license          = { :type => 'Apache 2.0', :file => 'LICENSE' }
   s.author           = {
     'MovingTech' => 'sdk@nammayatri.in'
   }
 
-  s.source       = { :http => "https://github.com/PraveenGongada/airborne/releases/download/v#{s.version}/Airborne.xcframework.zip" }
+  s.source       = { :http => "https://github.com/nammayatri/airborne/releases/download/v#{s.version}/Airborne.xcframework.zip" }
   
   s.ios.vendored_frameworks = "Airborne.xcframework"
   s.platform     = :ios, "12.0"
