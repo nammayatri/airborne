@@ -1,0 +1,157 @@
+// Copyright 2025 Juspay Technologies
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import com.android.Version
+import groovy.json.JsonSlurper
+
+buildscript {
+    ext.getExtOrDefault = { name ->
+        return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties['Airborne_' + name]
+    }
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.7.2"
+        // noinspection DifferentKotlinGradleVersion
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${getExtOrDefault('kotlinVersion')}"
+    }
+}
+
+def isNewArchitectureEnabled() {
+    return rootProject.hasProperty("newArchEnabled") && rootProject.getProperty("newArchEnabled") == "true"
+}
+
+def findReactNativeVersion() {
+    // Locate app's node_modules/react-native/package.json
+    def packageJson = file("${rootProject.projectDir}/../node_modules/react-native/package.json")
+    if (!packageJson.exists()) {
+        packageJson = file("${rootProject.projectDir}/node_modules/react-native/package.json")
+    }
+
+    if (!packageJson.exists()) {
+        println("[AirborneReact] Could not find react-native/package.json. Defaulting to latest.")
+        return "999.0.0"
+    }
+
+    def json = new JsonSlurper().parseText(packageJson.text)
+    return json.version
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+def appProject = rootProject.allprojects.find { it.plugins.hasPlugin('com.android.application') }
+
+apply plugin: "com.facebook.react"
+
+def getExtOrDefault(name) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties['Airborne_' + name]
+}
+
+def getExtOrIntegerDefault(name) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["Airborne_" + name]).toInteger()
+}
+
+android {
+
+    def agpVersion = Version.ANDROID_GRADLE_PLUGIN_VERSION
+    // Check AGP version for backward compatibility w/react-native versions still on gradle plugin 6
+    if (agpVersion.tokenize('.')[0].toInteger() >= 7) {
+        namespace = "in.juspay.airborneplugin"
+    }
+
+    compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
+
+    defaultConfig {
+        minSdkVersion getExtOrIntegerDefault("minSdkVersion")
+        targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
+
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ["src/main/java"]
+        }
+    }
+
+    def rnMinorVersion = findReactNativeVersion().tokenize('.')[1].toInteger()
+    if (rnMinorVersion >= 81) {
+        sourceSets.main.java.srcDirs += "src/latest/java"
+    } else if (rnMinorVersion >= 78 && rnMinorVersion < 81) {
+        sourceSets.main.java.srcDirs += "src/rn80/java"
+    } else {
+        sourceSets.main.java.srcDirs += "src/rn77/java"
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        debug {
+            initWith release
+        }
+
+        release {
+            minifyEnabled false
+        }
+    }
+
+    lintOptions {
+        disable "GradleCompatible"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += [
+                "generated/java",
+                "generated/jni"
+            ]
+        }
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    google()
+    maven { url "https://maven.juspay.in/hyper-sdk/" }
+}
+
+def kotlin_version = getExtOrDefault("kotlinVersion")
+
+dependencies {
+    implementation "com.facebook.react:react-android"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "com.jakewharton:process-phoenix:3.0.0"
+
+    // Airborne SDK dependency
+    api "com.movingtech:airborne:1.0.0"
+}
+
+react {
+    jsRootDir = file("../src/")
+    libraryName = "AirbornePlugin"
+    codegenJavaPackageName = "in.juspay.airborneplugin"
+}
