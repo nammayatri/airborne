@@ -47,14 +47,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PraveenGongada/airborne.git"
+    "url": "git+https://github.com/nammayatri/airborne.git"
   },
-  "author": "MovingTech <sdk@nammayatri.in> (https://github.com/PraveenGongada)",
+  "author": "MovingTech <sdk@nammayatri.in> (https://github.com/nammayatri)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/PraveenGongada/airborne/issues"
+    "url": "https://github.com/nammayatri/airborne/issues"
   },
-  "homepage": "https://github.com/PraveenGongada/airborne#readme",
+  "homepage": "https://github.com/nammayatri/airborne#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },

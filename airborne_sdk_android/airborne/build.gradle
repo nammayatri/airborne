@@ -89,7 +89,7 @@ afterEvaluate {
                 pom {
                     name = 'Airborne'
                     description = 'Airborne empowers developers to effortlessly integrate Over-The-Air (OTA) update capabilities into their Android, iOS, and React Native applications. Our primary focus is to provide robust, easy-to-use SDKs and plugins that streamline the update process directly within your client applications.'
-                    url = 'https://github.com/PraveenGongada/airborne'
+                    url = 'https://github.com/nammayatri/airborne'
                     licenses {
                         license {
                             name = 'The Apache License, Version 2.0'
@@ -104,9 +104,9 @@ afterEvaluate {
                         }
                     }
                     scm {
-                        connection = 'scm:git:github.com/PraveenGongada/airborne.git'
-                        developerConnection = 'scm:git:ssh://github.com/PraveenGongada/airborne.git'
-                        url = 'https://github.com/PraveenGongada/airborne/tree/main/airborne_sdk_android/airborne'
+                        connection = 'scm:git:github.com/nammayatri/airborne.git'
+                        developerConnection = 'scm:git:ssh://github.com/nammayatri/airborne.git'
+                        url = 'https://github.com/nammayatri/airborne/tree/main/airborne_sdk_android/airborne'
                     }
                 }
             }
