@@ -27,6 +27,10 @@ NSString *const APP_RESOURCES_DATA_FILE_NAME = @"app-resources.dat";
 NSString *const APP_OLD_RESOURCES_DATA_FILE_NAME = @"app-resources-old.dat";
 NSString *const APP_TEMP_RESOURCES_DATA_FILE_NAME = @"app-resources-temp.dat";
 
+NSString *const APP_BG_PENDING_DATA_FILE_NAME = @"app-bg-pending.dat";
+
+NSString *const AIRBORNE_NOTIFICATION_TYPE_UPDATE_AVAILABLE = @"UPDATE_AVAILABLE";
+
 NSString *const BOOT_TIMEOUT_NOTIFICATION = @"AJPBootTimeoutNotification";
 NSString *const PACKAGE_RESOURCE_NOTIFICATION = @"AJPPackageResourceNotification";
 NSString *const RELEASE_CONFIG_NOTIFICATION = @"AJPReleaseConfigNotification";

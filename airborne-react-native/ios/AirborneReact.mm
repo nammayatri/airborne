@@ -67,13 +67,27 @@ static NSString * const defaultNamespace = @"default";
 - (void)checkForUpdate:(NSString *)nameSpace
                resolve:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] checkForUpdateWithCompletion:^(NSString *status) {
+            resolve(status);
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 - (void)downloadUpdate:(NSString *)nameSpace
                resolve:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] downloadUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 - (void)startBackgroundDownload:(NSString *)nameSpace
@@ -134,13 +148,27 @@ RCT_EXPORT_METHOD(getBundlePath:(NSString *)nameSpace
 RCT_EXPORT_METHOD(checkForUpdate:(NSString *)nameSpace
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] checkForUpdateWithCompletion:^(NSString *status) {
+            resolve(status);
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 RCT_EXPORT_METHOD(downloadUpdate:(NSString *)nameSpace
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] downloadUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 RCT_EXPORT_METHOD(startBackgroundDownload:(NSString *)nameSpace

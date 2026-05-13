@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ide__getDiagnostics",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/airborne/airborne-react-native -name NativeAirborneSpec* -o -name *spec* -type f -not -path */node_modules/*)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer -type f -name *OTA* -o -name *airborne*)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/src -type f \\\\\\(-name *Navigation* -o -name *RootNav* \\\\\\))",
+      "Bash(grep -r \"getOTABundlePath\\\\|readReleaseConfig\\\\|airborne-react-native\" /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/src --include=*.tsx --include=*.ts)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/airborne -type d -name *artifact* -o -type d -name *release*)",
+      "Bash(grep -r \"releaseConfigTemplateUrl\\\\|release_config\\\\|getReleaseConfig\" /Users/praveenkumar/Documents/NammaYatri/airborne/airborne-react-native/example --include=*.kt --include=*.java)",
+      "Bash(grep -r nammayatriv2 /Users/praveenkumar/Documents/NammaYatri/airborne --include=*.kt --include=*.java --include=*.json --include=*.ts)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/android/app/src -type d -name *cumta*)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/android/app/src -type f -name getJSBundleFile* -o -name *BundleAssetHelper*)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/.github/workflows -name *.yaml -o -name *.yml)",
+      "Bash(grep -r \"getDimensions\\\\|checkForUpdate\\\\|fetchLatestReleaseConfig\\\\|downloadUpdate\" /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/android --include=*.kt --include=*.java)",
+      "Bash(grep -r Airborne /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/ios/*.m*)",
+      "Bash(grep -r \"dimensions\\\\|bundleUrl\\\\|OTA\" /Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/ios/*.mm)",
+      "Bash(grep -r \"rcHeaders\\\\|x-dimension\" /Users/praveenkumar/Documents/NammaYatri/airborne --include=*.kt --include=*.java)",
+      "Bash(grep -r \"createApplicationManager\\\\|HyperOTAServices\" /Users/praveenkumar/Documents/NammaYatri/airborne --include=*.kt --include=*.java)",
+      "Bash(grep:*)",
+      "Bash(awk:*)",
+      "Bash(adb logcat:*)",
+      "Bash(find /Users/praveenkumar/Documents/NammaYatri/airborne -type f \\\\\\(-name *.kt -o -name *.java \\\\\\) -not -path */build/* -not -path */node_modules/*)",
+      "Bash(adb devices *)",
+      "Bash(git stash *)",
+      "Read(//tmp/**)",
+      "Bash(adb shell *)",
+      "Bash(curl -s \"https://airborne.juspay.in/release/movingtech/chennai-one-debug\")",
+      "Bash(python3 -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\('server pkg version:',d['package'].get\\('version'\\)\\);print\\('server pkg name:',d['package'].get\\('name'\\)\\);print\\('important count:',len\\(d['package'].get\\('important',[]\\)\\)\\)\")",
+      "Read(//Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/ios/**)",
+      "Read(//Users/praveenkumar/Documents/NammaYatri/ny-react-native/consumer/ios/Nammayatri/**)",
+      "Bash(nm -m /Users/praveenkumar/Library/Developer/Xcode/DerivedData/Nammayatri-espvqppimfzqxjdvebzlxokvaaem/Build/Products/Debug-iphonesimulator/Cumta.app/Cumta.debug.dylib)",
+      "Read(//Users/praveenkumar/Documents/Catalyst/**)",
+      "Bash(xcodebuild -project /Users/praveenkumar/Documents/NammaYatri/airborne/airborne_sdk_iOS/hyper-ota/Airborne.xcodeproj -scheme Airborne -destination 'generic/platform=iOS Simulator' -configuration Debug build)",
+      "Bash(xcodebuild -workspace Nammayatri.xcworkspace -scheme AirborneReact -configuration Debug -destination 'generic/platform=iOS Simulator' build)",
+      "Bash(xcodebuild -workspace Nammayatri.xcworkspace -scheme Cumta-Debug -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16' build)"
+    ]
+  }
+}

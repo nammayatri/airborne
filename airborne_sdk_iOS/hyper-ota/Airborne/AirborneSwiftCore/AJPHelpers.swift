@@ -57,12 +57,19 @@ import CommonCrypto
         guard let dict = dict else {
             return Data()
         }
-        
+
         do {
             let data = try JSONSerialization.data(withJSONObject: dict, options: [])
             return data.isEmpty ? Data() : data
         } catch {
             return Data()
         }
+    }
+
+    /// ObjC bridge for `AJPCompression.maybeDecompressZip`. Returns the decompressed
+    /// payload if `data` is a single-entry ZIP, otherwise returns `data` unchanged.
+    /// Returns nil and populates `error` on malformed/unsupported ZIP input.
+    @objc public static func maybeDecompressZip(_ data: Data) throws -> Data {
+        return try AJPCompression.maybeDecompressZip(data)
     }
 }

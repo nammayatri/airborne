@@ -27,10 +27,11 @@ let package = Package(
             publicHeadersPath: "include",
             cSettings: [
                 .headerSearchPath("include"),
+                .headerSearchPath("ApplicationManager"),
                 .headerSearchPath("ApplicationManager/Constants"),
                 .headerSearchPath("ApplicationManager/Tracker"),
                 .headerSearchPath("Helper")
-            ],
+            ]
         ),
         .target(
             name: "Airborne",

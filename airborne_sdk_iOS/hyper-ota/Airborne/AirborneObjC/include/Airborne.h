@@ -14,6 +14,7 @@
 #import "AJPApplicationResources.h"
 #import "AJPResource.h"
 #import "AJPHelpers.h"
+#import "AJPBackgroundDownloadCoordinator.h"
 #else
 #import <Airborne/AJPApplicationManager.h>
 #import <Airborne/AJPApplicationManagerDelegate.h>
@@ -23,4 +24,5 @@
 #import <Airborne/AJPApplicationResources.h>
 #import <Airborne/AJPResource.h>
 #import <Airborne/AJPHelpers.h>
+#import <Airborne/AJPBackgroundDownloadCoordinator.h>
 #endif

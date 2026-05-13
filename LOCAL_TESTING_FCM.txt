@@ -1,0 +1,215 @@
+================================================================================
+Airborne iOS — local testing for silent-push (FCM) bundle download
+================================================================================
+
+This walks through sending an UPDATE_AVAILABLE silent push to the consumer's
+iOS app via FCM HTTP v1, so the URLSession.background path inside the SDK
+exercises end-to-end without waiting on the production backend.
+
+PREREQUISITES
+--------------------------------------------------------------------------------
+- A physical iOS device. Silent push is NOT delivered to iOS Simulator.
+- The consumer iOS app installed on the device, with `enableBootDownload = NO`
+  in AppDelegate (already wired). The device must have run the app once so
+  Firebase has registered the FCM token.
+- `gcloud` CLI authenticated with an account that has the
+  `roles/firebasecloudmessaging.admin` role (or equivalent) on the
+  `jp-beckn-dev` Firebase project. Or a service-account JSON, see ALTERNATIVE
+  below.
+- The `Info.plist` has `UIBackgroundModes: ["remote-notification"]` and the
+  `aps-environment` entitlement is set to `development` for the build you're
+  testing (Debug builds typically use `development`).
+
+
+STEP 1 — GET THE DEVICE'S FCM TOKEN
+--------------------------------------------------------------------------------
+Run the consumer app on the device. The AppDelegate logs the FCM token via the
+existing `messaging:didReceiveRegistrationToken:` Firebase callback — the only
+hook that fires AFTER iOS has set the APNs device token (calling
+`tokenWithCompletion:` earlier than that warns "APNS device token not set
+before retrieving FCM Token" and returns nothing).
+
+The token shows up in two places:
+
+  1. Live token, printed inside didReceiveRegistrationToken (fires after APNs
+     registration completes — first-install needs to wait for this):
+
+         ========== AIRBORNE FCM TOKEN (live) ============
+         <token-here>
+         =================================================
+
+  2. Cached token, printed on every subsequent launch (read from NSUserDefaults
+     — populated by the previous run's didReceiveRegistrationToken, so this is
+     empty on first install):
+
+         ========== AIRBORNE FCM TOKEN (cached) ==========
+         <token-here>
+         =================================================
+
+The pre-existing line `NSLOG newToken --------------------------> <token>` also
+prints the same value next to the banner.
+
+Filter the Xcode console with `AIRBORNE FCM TOKEN` to find the lines fast.
+
+If you don't see the live banner on a fresh install, check that:
+- the device has accepted the notification permission prompt (which the
+  AppDelegate's dispatch_after block at line ~167 asks for, ~2s after launch),
+- the device is online,
+- and a Firebase APNs auth key (.p8) is configured under Project Settings →
+  Cloud Messaging in the Firebase console for the `jp-beckn-dev` project.
+
+
+STEP 2 — GET AN OAUTH ACCESS TOKEN FOR FCM HTTP V1
+--------------------------------------------------------------------------------
+FCM HTTP v1 is OAuth-bearer. The legacy "server key" API is deprecated.
+
+If gcloud is set up:
+
+    gcloud auth application-default login   # one-time, browser flow
+
+    ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+    echo "$ACCESS_TOKEN"   # sanity check, should be a long ya29... string
+
+The token expires in ~1 hour. If your curl below returns 401 UNAUTHENTICATED,
+re-run `gcloud auth application-default print-access-token` to get a fresh one.
+
+ALTERNATIVE — service account JSON:
+
+    # 1. In Firebase console → Project Settings → Service Accounts →
+    #    "Generate new private key". Save the JSON locally.
+    # 2. Use a tiny helper to mint an OAuth token. The simplest is:
+
+    SERVICE_ACCOUNT=/path/to/service-account.json
+    ACCESS_TOKEN=$(python3 -c "
+    import json, time, urllib.request
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+    creds = service_account.Credentials.from_service_account_file(
+        '$SERVICE_ACCOUNT',
+        scopes=['https://www.googleapis.com/auth/firebase.messaging']
+    )
+    creds.refresh(Request())
+    print(creds.token)
+    ")
+
+
+STEP 3 — SEND THE SILENT PUSH (FCM HTTP V1)
+--------------------------------------------------------------------------------
+Fill in:
+
+    FCM_TOKEN="<paste from step 1>"
+    ACCESS_TOKEN="<paste from step 2>"
+    PROJECT_ID="jp-beckn-dev"
+    BUNDLE_ID="com.movingtech.multimodaldev"   # Cumta debug variant; swap for other variants
+
+Then:
+
+    curl -v -X POST \
+      "https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send" \
+      -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "message": {
+          "token": "'"${FCM_TOKEN}"'",
+          "data": {
+            "notification_type": "UPDATE_AVAILABLE"
+          },
+          "apns": {
+            "headers": {
+              "apns-push-type": "background",
+              "apns-priority": "5"
+            },
+            "payload": {
+              "aps": {
+                "content-available": 1
+              }
+            }
+          }
+        }
+      }'
+
+Expected: HTTP 200 with JSON `{"name":"projects/jp-beckn-dev/messages/<id>"}`.
+
+PAYLOAD NOTES
+- `apns-push-type: background` + `apns-priority: 5` + `aps.content-available: 1`
+  is what makes APNs treat this as silent (no banner, no sound, wakes the app
+  briefly). Skipping any of these turns it into a regular alert push and the
+  Airborne handler won't run.
+- `data.notification_type = "UPDATE_AVAILABLE"` is what AirborneServices.handleSilentPush
+  matches against (top-level `notification_type` in userInfo). The SDK also
+  matches `aps.category == "UPDATE_AVAILABLE"` if you'd rather put it inside aps.
+- `apns-topic` MUST be the bundle ID of the build on the device. Mismatched
+  topic → APNs silently drops the push.
+
+
+STEP 4 — VERIFY THE FLOW ON DEVICE
+--------------------------------------------------------------------------------
+1. With the app in BACKGROUND (Home button or app switcher — NOT force-quit),
+   trigger the curl above.
+
+2. Stream device logs and filter for Airborne. Plug device in via USB:
+
+       xcrun devicectl list devices                              # find UDID
+       UDID=<your-device-udid>
+       xcrun devicectl device process logging --device "$UDID" \
+           --predicate 'subsystem == "in.juspay.Airborne"'
+
+   Or (simpler, if Console.app is open and the device is selected): filter for
+   `BackgroundDownload`.
+
+3. Expected log sequence (varies slightly with diff/no-diff):
+
+       BackgroundDownload  bg_download_started        { task_count = 1, target_package_version = "<v>" }
+       BackgroundDownload  bg_download_task_completed { filePath = "main.jsbundle", size_bytes = ... }
+       BackgroundDownload  bg_download_session_finished { target_package_version = "<v>" }
+
+   If you instead see `bg_download_no_diff`, the server is at the same version
+   as what's already on disk — there's nothing to download. Bump the server's
+   release config and retry.
+
+4. Confirm the temp marker landed on disk. From the Mac (still over USB):
+
+       xcrun devicectl device storage exec --device "$UDID" -- \
+         ls -la /Library/JuspayManifests/anna/
+
+   You should see `app-pkg-temp.dat` (and `app-resources-temp.dat` if resources
+   changed). The simulator equivalent for reference:
+
+       APP_DATA=$(xcrun simctl get_app_container booted "${BUNDLE_ID}" data)
+       ls "$APP_DATA/Library/JuspayManifests/anna/"
+
+5. Foreground the app via tap. Expected log on cold-launch path:
+
+       temp_package_installation_started   count=N
+       temp_package_installed              version=<v>
+
+   And `getReleaseConfig()` from JS should now report the new version.
+
+
+TROUBLESHOOTING
+--------------------------------------------------------------------------------
+- 401 UNAUTHENTICATED → access token expired or wrong scope. Re-run step 2.
+- 400 INVALID_ARGUMENT — "Invalid registration" → FCM token is stale, get a
+  fresh one from the device (uninstall/reinstall app or wait for the next
+  registration refresh).
+- HTTP 200 from FCM but no log on device → push was throttled by APNs (silent
+  pushes are best-effort, "few per hour per device"), or the device is in low-
+  power mode, or the app was force-quit. Wait 5 minutes and try again, or
+  reopen the app and put it in background freshly.
+- App is in foreground when push arrives → the SDK still runs the same flow,
+  but you won't see the auto-kill behavior (we removed exit(0) anyway). Look
+  for `foreground_skipped_due_to_bg_in_flight` if a JS-driven downloadUpdate
+  collides with the silent-push download.
+- `notification_type` arriving in a different shape than the SDK expects →
+  inspect raw userInfo in AppDelegate.mm:`willPresentNotification:` /
+  `didReceiveNotificationResponse:` (already prints `User Info : %@`). The SDK
+  matches top-level `notification_type` OR `aps.category`. If you need it
+  somewhere else (e.g. nested at `aps.data.notification_type`), let me know
+  and I'll add the path.
+
+
+REVERTING LOCAL-TESTING CHANGES
+--------------------------------------------------------------------------------
+- consumer/ios/Nammayatri/AppDelegate.mm — token log block in
+  didFinishLaunchingWithOptions (search for "AIRBORNE FCM TOKEN")
+- delete this file before pushing

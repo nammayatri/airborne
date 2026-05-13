@@ -232,6 +232,111 @@ extension AppDelegate: AirborneDelegate {
 }
 ```
 
+### 2. Wire silent-push background bundle download (iOS)
+
+iOS supports the same silent-push-triggered background bundle download as Android. When the
+backend sends an APNs silent push with `notification_type` (or `aps.category`) equal to
+`UPDATE_AVAILABLE`, the SDK kicks off a `URLSession.background` download outside the app
+process. The new bundle becomes live on the next user-initiated cold launch.
+
+The push is delivered to the AppDelegate, not to JS, so wiring is done in native code
+(mirrors the Android FCM service pattern). Forward two AppDelegate callbacks to Airborne:
+
+```swift
+import UIKit
+import Airborne
+
+@main
+class AppDelegate: UIResponder, UIApplicationDelegate {
+
+    // ... existing didFinishLaunchingWithOptions and Airborne init ...
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        if AirborneServices.handleSilentPush(userInfo: userInfo,
+                                              fetchCompletionHandler: completionHandler) {
+            return
+        }
+        // Fall through to other push handlers (FCM, in-house, etc.)
+        completionHandler(.noData)
+    }
+
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        if AirborneServices.handleBackgroundURLSession(identifier: identifier,
+                                                        completionHandler: completionHandler) {
+            return
+        }
+        // Fall through for other background URLSessions
+        completionHandler()
+    }
+}
+```
+
+Both static methods return `true` if Airborne took ownership of the call. The consumer is
+expected to fall through to other handlers when `false` is returned.
+
+#### Capability checklist
+
+| Requirement | Where | Notes |
+| --- | --- | --- |
+| `UIBackgroundModes` includes `remote-notification` | App `Info.plist` | Required so APNs `content-available: 1` wakes the app while suspended/terminated. |
+| `aps-environment` entitlement (`development` or `production`) | App `*.entitlements` | Required for any push. |
+| APNs auth key (.p8) configured on backend | Backend infra | Required to deliver pushes. |
+
+`fetch` and `processing` background modes are NOT required — `URLSession.background` runs in
+an OS-managed daemon that doesn't depend on those flags. `BGTaskScheduler` is not used.
+
+#### Push payload contract
+
+The SDK accepts either of these payload shapes (matches the existing NammaYatri convention):
+
+```jsonc
+// Form A — top-level notification_type (matches FCM data shape)
+{ "aps": { "content-available": 1 }, "notification_type": "UPDATE_AVAILABLE" }
+
+// Form B — aps.category (iOS standard category convention)
+{ "aps": { "content-available": 1, "category": "UPDATE_AVAILABLE" } }
+```
+
+The payload does NOT need to carry the namespace; the SDK uses the namespace it was
+initialized with via `AirborneServices.init(...)`. Multi-namespace consumer apps (rare) can
+use the per-instance `airborne.handleSilentPush(...)` method to route explicitly.
+
+Optional `entity_data` (JSON-encoded string) may carry `version` for logging; the SDK
+ignores other fields.
+
+#### Caveats
+
+- **Force-quit apps**: APNs does not deliver silent pushes to apps the user has force-quit
+  from the app switcher. Such users will fall back to the existing on-app-open download path.
+- **APNs throttling**: silent pushes are best-effort; not every push is delivered. Treat as
+  a faster bundle adoption path, not a guaranteed delivery channel.
+- **No in-process reload**: when the background download finishes, the bundle is staged in
+  `~/Library/JuspayManifests/<namespace>/app-pkg-temp.dat`. The next user-initiated cold
+  launch swaps it in via the existing init path. The SDK does NOT force-restart the app.
+
+#### iOS JS bridges
+
+| JS method | iOS behavior |
+| --- | --- |
+| `checkForUpdate(namespace)` | Fetches RC + diffs against the on-disk bundle. Resolves with `"UPDATE_AVAILABLE"` / `"NO_UPDATE_AVAILABLE"` / error string. No download. |
+| `downloadUpdate(namespace)` | Foreground download cycle (default `URLSession`). Resolves `true` once temp markers are written; the new bundle becomes live on the next user-initiated cold launch. |
+| `startBackgroundDownload(namespace)` | Rejects with `AIRBORNE_NOT_IMPLEMENTED_IOS`. Silent-push handling on iOS is wired via the AppDelegate forwarder above; consumers don't trigger it from JS. |
+| `hasPendingBundleUpdate(namespace)` | Rejects with `AIRBORNE_NOT_IMPLEMENTED_IOS`. The Android equivalent works around an OEM issue (some devices keep the JS context alive across "kill from recents"); iOS doesn't have that problem — the swap happens automatically on the next cold launch. |
+| `reloadApp(namespace)` | Rejects with `AIRBORNE_NOT_IMPLEMENTED_IOS`. App Store guideline 4.5.4 discourages programmatic termination, and on iOS it's not needed: when the user closes/reopens the app naturally, `handleTempPackageInstallation` swaps in the new bundle. |
+
+The `enableBootDownload` flag on `AirborneDelegate` (default `true`) gates the SDK's
+automatic boot-time RC fetch + download. Setting it to `false` is the typical pairing
+with the JS-driven `checkForUpdate` / `downloadUpdate` flow: the SDK serves the
+already-committed bundle at boot and updates only when JS asks.
+
 ## React Native Usage
 
 After native initialization, you can use Airborne in your React Native code:

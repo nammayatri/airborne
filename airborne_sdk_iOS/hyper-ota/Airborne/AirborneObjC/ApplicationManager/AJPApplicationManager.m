@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import "AJPApplicationManager.h"
+#import "AJPApplicationManager+Internal.h"
 #import "AJPApplicationManifest.h"
 #import <WebKit/WebKit.h>
 #import "AJPApplicationConstants.h"
@@ -148,6 +149,11 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
         } else {
             self.forceUpdate = true;
         }
+
+        BOOL enableBootDownload = YES;
+        if ([self.delegate respondsToSelector:@selector(enableBootDownload)]) {
+            enableBootDownload = [self.delegate enableBootDownload];
+        }
         
         self.stateLock = [[NSLock alloc] init];
         self.collectionsLock = [[NSLock alloc] init];
@@ -165,6 +171,17 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
             [[NSNotificationCenter defaultCenter] postNotificationName:RELEASE_CONFIG_NOTIFICATION
                                                                         object:nil
                                                                       userInfo:@{}];
+        } else if (!enableBootDownload) {
+            // Boot download disabled by delegate. Serve the bundle currently committed
+            // on disk; updates happen via push or explicit AirborneServices.downloadUpdate.
+            self.releaseConfigDownloadStatus = COMPLETED;
+            self.resourceDownloadStatus = COMPLETED;
+            self.importantPackageDownloadStatus = COMPLETED;
+            self.lazyPackageDownloadStatus = COMPLETED;
+            [self.tracker trackInfo:@"boot_download_disabled" value:[@{} mutableCopy]];
+            [[NSNotificationCenter defaultCenter] postNotificationName:RELEASE_CONFIG_NOTIFICATION
+                                                                object:nil
+                                                              userInfo:@{}];
         } else {
             dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                 [self startDownload];
@@ -197,7 +214,13 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
     
     // Handle if any previously downloaded resources are available.
     [self handleTempResourcesInstallation];
-    
+
+    // Clear any stale silent-push background-download state (>24h old). Such state
+    // means an earlier push-triggered download started but never delivered its
+    // urlSessionDidFinishEvents (e.g., the OS gave up retrying, or the user never
+    // brought the app back to launch the URLSession daemon).
+    [self cleanupStaleBgPendingIfNeeded];
+
     self.config = [self readApplicationConfig];
     
     
@@ -777,6 +800,26 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
         return;
     }
 
+    // If a silent-push-driven background download is in flight (per
+    // app-bg-pending.dat), skip the foreground update cycle. Running both would
+    // race on JuspayPackages/temp via prepareTempDirectory and could destroy
+    // already-downloaded files. The background URLSession daemon owns the cycle
+    // until urlSessionDidFinishEvents writes app-pkg-temp.dat; the new bundle
+    // becomes live on the next cold launch when handleTempPackageInstallation
+    // consumes that marker.
+    NSString *bgPendingPath = [self.fileUtil fullPathInStorageForFilePath:APP_BG_PENDING_DATA_FILE_NAME
+                                                                 inFolder:JUSPAY_MANIFEST_DIR];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:bgPendingPath]) {
+        [self.tracker trackInfo:@"foreground_skipped_due_to_bg_in_flight"
+                          value:[@{@"reason": @"app-bg-pending.dat present"} mutableCopy]];
+        self.releaseConfigDownloadStatus = COMPLETED;
+        self.importantPackageDownloadStatus = COMPLETED;
+        self.resourceDownloadStatus = COMPLETED;
+        self.lazyPackageDownloadStatus = COMPLETED;
+        [self fireCallbacks];
+        return;
+    }
+
     // Download important packages first
     if (!([self.package.version isEqualToString: self.downloadedApplicationManifest.package.version] &&
          [self.package.name isEqualToString:self.downloadedApplicationManifest.package.name])) {
@@ -1095,8 +1138,12 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
     [request setValue:self.config.version forHTTPHeaderField: @"x-config-version"];
     
     // TODO: hyper sdk version can also be added from the headers from SessionManager
+    // Sorted alphabetically so backend cache keys are stable across launches —
+    // NSDictionary enumeration order is unspecified. Matches Android's
+    // `rcHeaders.toSortedMap()` (ApplicationManager.kt:615).
+    NSArray<NSString *> *sortedDimKeys = [self.releaseConfigHeaders.allKeys sortedArrayUsingSelector:@selector(compare:)];
     NSMutableString *dimensions = [NSMutableString string];
-    for (NSString *field in self.releaseConfigHeaders) {
+    for (NSString *field in sortedDimKeys) {
         [dimensions appendString:[NSString stringWithFormat:@"%@=%@;", field, self.releaseConfigHeaders[field]]];
     }
     if (![dimensions isEqualToString: @""]) {
@@ -1751,35 +1798,40 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
     }
 }
 
-- (BOOL)shouldDownloadResource:(AJPResource*)resourceToBeDownloaded existingResource:(AJPResource*)existingResource  {
+- (BOOL)shouldDownloadResource:(AJPResource*)resourceToBeDownloaded existingResource:(AJPResource*)existingResource {
+    return [AJPApplicationManager shouldDownloadResource:resourceToBeDownloaded existingResource:existingResource];
+}
+
++ (BOOL)shouldDownloadResource:(AJPResource * _Nullable)resourceToBeDownloaded
+              existingResource:(AJPResource * _Nullable)existingResource {
     if (existingResource == nil) {
         return YES;
     }
-       
+
     if (resourceToBeDownloaded == nil) {
         return NO;
     }
-    
+
     BOOL urlChanged = ![[resourceToBeDownloaded.url absoluteString] isEqualToString:[existingResource.url absoluteString]];
-    
+
     if (urlChanged) {
         return YES;
     }
-    
+
     BOOL checksumChanged = NO;
     NSString *newChecksum = resourceToBeDownloaded.checksum;
     NSString *existingChecksum = existingResource.checksum;
-    
+
     BOOL newValid = newChecksum != nil && newChecksum.length > 0;
     BOOL existingValid = existingChecksum != nil && existingChecksum.length > 0;
-    
+
     if (newValid && existingValid) {
         checksumChanged = ![newChecksum isEqualToString:existingChecksum];
     } else {
         // if either is nil or empty, treat them as different
         checksumChanged = YES;
     }
-    
+
     return checksumChanged;
 }
 
@@ -2088,9 +2140,61 @@ static NSMutableDictionary<NSString*,AJPApplicationManager*>* managers;
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *tempDirPath = [self.fileUtil fullPathInStorageForFilePath:JUSPAY_TEMP_DIR
                                                                inFolder:JUSPAY_PACKAGE_DIR];
-    
+
     if ([fileManager fileExistsAtPath:tempDirPath]) {
         [fileManager removeItemAtPath:tempDirPath error:nil];
+    }
+}
+
+- (void)cleanupStaleBgPendingIfNeeded {
+    NSString *pendingPath = [self.fileUtil fullPathInStorageForFilePath:APP_BG_PENDING_DATA_FILE_NAME
+                                                               inFolder:JUSPAY_MANIFEST_DIR];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:pendingPath]) {
+        return;
+    }
+
+    NSError *readError = nil;
+    NSData *data = [NSData dataWithContentsOfFile:pendingPath options:0 error:&readError];
+    if (data == nil) {
+        [self purgeBgPendingArtifactsWithReason:@"unreadable"];
+        return;
+    }
+
+    NSSet *allowed = [NSSet setWithObjects:[NSDictionary class], [NSString class],
+                      [NSNumber class], [NSDate class], [NSSet class],
+                      [NSArray class], [NSData class], nil];
+    NSError *decodeError = nil;
+    id decoded = [NSKeyedUnarchiver unarchivedObjectOfClasses:allowed fromData:data error:&decodeError];
+    if (![decoded isKindOfClass:[NSDictionary class]]) {
+        [self purgeBgPendingArtifactsWithReason:@"undecodable"];
+        return;
+    }
+    NSDictionary *pending = (NSDictionary *)decoded;
+    id startedAtObj = pending[@"started_at"];
+    if (![startedAtObj isKindOfClass:[NSDate class]]) {
+        [self purgeBgPendingArtifactsWithReason:@"missing_started_at"];
+        return;
+    }
+
+    NSTimeInterval ageSeconds = -[(NSDate *)startedAtObj timeIntervalSinceNow];
+    if (ageSeconds > 24 * 60 * 60) {
+        [self.tracker trackInfo:@"stale_bg_pending_cleared"
+                          value:[@{@"age_hours": @(ageSeconds / 3600.0)} mutableCopy]];
+        [self purgeBgPendingArtifactsWithReason:@"age_exceeded"];
+    }
+}
+
+- (void)purgeBgPendingArtifactsWithReason:(NSString *)reason {
+    [self.fileUtil deleteFile:APP_BG_PENDING_DATA_FILE_NAME inFolder:JUSPAY_MANIFEST_DIR error:nil];
+    [self.fileUtil deleteFile:APP_MANIFEST_DATA_TEMP_FILE_NAME inFolder:JUSPAY_MANIFEST_DIR error:nil];
+    [self cleanupTempDirectory];
+
+    NSString *resourceTempPath = [self.fileUtil fullPathInStorageForFilePath:JUSPAY_TEMP_DIR
+                                                                    inFolder:JUSPAY_RESOURCE_DIR];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if ([fileManager fileExistsAtPath:resourceTempPath]) {
+        [fileManager removeItemAtPath:resourceTempPath error:nil];
     }
 }
 

@@ -108,6 +108,16 @@
 - (BOOL)shouldDoForceUpdate;
 
 /**
+ * Determines whether the SDK should run its automatic boot-time release-config fetch and
+ * package download cycle. When NO, the boot-time cycle is skipped entirely; the SDK serves
+ * the bundle currently committed on disk and only updates when the consumer explicitly
+ * triggers a download (e.g. AirborneServices.downloadUpdate, silent push, etc.).
+ *
+ * @return YES to run the boot-time download cycle (default), NO to skip it.
+ */
+- (BOOL)enableBootDownload;
+
+/**
  * Returns the file utility instance for local file operations.
  *
  * This method allows the delegate to provide a custom file utility instance

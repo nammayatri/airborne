@@ -53,6 +53,8 @@
 		DC6A9D772F8E3DFB00FE7DF0 /* Airborne.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* Airborne.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DC6A9D842F8E53F100FE7DF0 /* AJPHelpers.h in Headers */ = {isa = PBXBuildFile; fileRef = DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		DC6A9D862F8E540300FE7DF0 /* AJPHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = DC6A9D852F8E540300FE7DF0 /* AJPHelpers.m */; };
+		B600F00D00000000DC000010 /* AJPBackgroundDownloadCoordinator.h in Headers */ = {isa = PBXBuildFile; fileRef = B600F00D00000000DC000001 /* AJPBackgroundDownloadCoordinator.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		B600F00D00000000DC000011 /* AJPBackgroundDownloadCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = B600F00D00000000DC000002 /* AJPBackgroundDownloadCoordinator.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,6 +121,9 @@
 		DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AJPHelpers.h; sourceTree = "<group>"; };
 		DC6A9D852F8E540300FE7DF0 /* AJPHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AJPHelpers.m; sourceTree = "<group>"; };
 		DCB613FB2E6191FB0099D87E /* Airborne.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Airborne.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B600F00D00000000DC000001 /* AJPBackgroundDownloadCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AJPBackgroundDownloadCoordinator.h; sourceTree = "<group>"; };
+		B600F00D00000000DC000002 /* AJPBackgroundDownloadCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AJPBackgroundDownloadCoordinator.m; sourceTree = "<group>"; };
+		B600F00D00000000DC000003 /* AJPApplicationManager+Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AJPApplicationManager+Internal.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -198,10 +203,12 @@
 				DC2400A82E8BD5C50071EE0E /* Tracker */,
 				DC2400A92E8BD5C50071EE0E /* AJPApplicationConfig.m */,
 				DC2400AA2E8BD5C50071EE0E /* AJPApplicationManager.m */,
+				B600F00D00000000DC000003 /* AJPApplicationManager+Internal.h */,
 				DC2400AB2E8BD5C50071EE0E /* AJPApplicationManifest.m */,
 				DC2400AC2E8BD5C50071EE0E /* AJPApplicationPackage.m */,
 				DC2400AD2E8BD5C50071EE0E /* AJPApplicationResources.m */,
 				DC2400AE2E8BD5C50071EE0E /* AJPResource.m */,
+				B600F00D00000000DC000002 /* AJPBackgroundDownloadCoordinator.m */,
 			);
 			path = ApplicationManager;
 			sourceTree = "<group>";
@@ -226,6 +233,7 @@
 				DC2400BB2E8BD5C50071EE0E /* AJPApplicationResources.h */,
 				DC2400C02E8BD5C50071EE0E /* AJPResource.h */,
 				DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */,
+				B600F00D00000000DC000001 /* AJPBackgroundDownloadCoordinator.h */,
 			);
 			path = include;
 			sourceTree = "<group>";
@@ -319,6 +327,7 @@
 				DC2400DA2E8BD5C50071EE0E /* AJPResource.h in Headers */,
 				DC2400D32E8BD5C50071EE0E /* AJPApplicationConstants.h in Headers */,
 				DC2400D42E8BD5C50071EE0E /* AJPApplicationTracker.h in Headers */,
+				B600F00D00000000DC000010 /* AJPBackgroundDownloadCoordinator.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -517,6 +526,7 @@
 				DC6A9D862F8E540300FE7DF0 /* AJPHelpers.m in Sources */,
 				DC2400E62E8BD5C50071EE0E /* AJPResource.m in Sources */,
 				DC2400E82E8BD5C50071EE0E /* AJPApplicationTracker.m in Sources */,
+				B600F00D00000000DC000011 /* AJPBackgroundDownloadCoordinator.m in Sources */,
 				DC2400E92E8BD5C50071EE0E /* AJPApplicationResources.m in Sources */,
 				DC2400ED2E8BD5C50071EE0E /* Airborne.swift in Sources */,
 			);

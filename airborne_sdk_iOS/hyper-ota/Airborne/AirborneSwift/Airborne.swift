@@ -60,6 +60,20 @@ import AirborneSwiftCore
     @objc optional func dimensions() -> [String: String]
     
     /**
+     * Determines whether the SDK should run its automatic boot-time release-config fetch
+     * and package download cycle.
+     *
+     * Default is `true`. When `false`, the SDK serves the bundle currently committed on
+     * disk and does NOT fetch the release config or download anything at init. Updates
+     * still happen via APNs silent push (handleSilentPush) and via explicit
+     * `downloadUpdate(...)` calls.
+     *
+     * @return `false` to suppress the boot-time download cycle; `true` (or unimplemented)
+     *         to keep the existing behavior.
+     */
+    @objc optional func enableBootDownload() -> Bool
+
+    /**
      * Called when the OTA boot process has completed successfully.
      *
      * This callback indicates that the application is ready to load the packages & resources
@@ -134,9 +148,9 @@ import AirborneSwiftCore
  * calls delegate methods to notify about progress and completion.
  */
 @objc public class AirborneServices: NSObject {
-    
+
     // MARK: - Private Properties
-    
+
     private let releaseConfigURL: String
     private lazy var namespace: String = {
         // TODO: Default namespace needs to be confirmed
@@ -148,10 +162,52 @@ import AirborneSwiftCore
     private lazy var bundlePath: Bundle = {
         delegate?.bundle?() ?? Bundle.main
     }()
-    
+
     private weak var delegate: AirborneDelegate?
     private var applicationManager: AJPApplicationManager?
     private var lazyPackageObserver: NSObjectProtocol?
+
+    // MARK: - Namespace Registry (for silent-push background download routing)
+
+    private static var _registry: [String: AirborneServices] = [:]
+    private static let _registryQueue = DispatchQueue(
+        label: "in.juspay.Airborne.bgRegistry",
+        attributes: .concurrent
+    )
+
+    /// Returns the AirborneServices instance previously initialized for the given namespace,
+    /// if one is currently registered. The silent-push background-download path uses this to
+    /// find a tracker / configuration for a namespace without requiring the consumer to thread
+    /// the instance into the AppDelegate forwarder.
+    @objc public static func registeredInstance(forNamespace namespace: String) -> AirborneServices? {
+        var result: AirborneServices?
+        _registryQueue.sync {
+            result = _registry[namespace]
+        }
+        return result
+    }
+
+    /// All registered (namespace, instance) pairs. Used by the static silent-push facade to
+    /// fan out an UPDATE_AVAILABLE notification when the payload doesn't carry a namespace.
+    internal static func allRegisteredInstances() -> [(namespace: String, instance: AirborneServices)] {
+        var result: [(String, AirborneServices)] = []
+        _registryQueue.sync {
+            result = _registry.map { ($0.key, $0.value) }
+        }
+        return result
+    }
+
+    private static func register(_ instance: AirborneServices, forNamespace namespace: String) {
+        _registryQueue.async(flags: .barrier) {
+            _registry[namespace] = instance
+        }
+    }
+
+    private static func unregister(forNamespace namespace: String) {
+        _registryQueue.async(flags: .barrier) {
+            _registry.removeValue(forKey: namespace)
+        }
+    }
     
     // MARK: - Initialization
     
@@ -171,18 +227,35 @@ import AirborneSwiftCore
         self.releaseConfigURL = releaseConfigURL
         self.delegate = delegate
         super.init()
+        // Persist config so the silent-push coordinator can run even when no live
+        // AirborneServices instance is in memory (e.g., OS-launched-for-push edge case).
+        self.persistBackgroundConfig()
+        AirborneServices.register(self, forNamespace: self.namespace)
         self.setupLazyPackageNotifications()
         self.startApplicationManager()
     }
-    
+
     public func getBaseBundle() -> Bundle {
         return bundlePath
     }
-    
+
     deinit {
         if let observer = lazyPackageObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        AirborneServices.unregister(forNamespace: self.namespace)
+    }
+
+    /// Writes namespace-scoped keys to NSUserDefaults so that the background-download
+    /// coordinator can read configuration without a live SDK instance. The keys mirror
+    /// what `Airborne` (Android) keeps in `airborne_worker_config` SharedPreferences.
+    private func persistBackgroundConfig() {
+        let defaults = UserDefaults.standard
+        let ns = self.namespace
+        defaults.set(self.releaseConfigURL, forKey: "airborne.bg.\(ns).rcUrl")
+        let dimsData = (try? JSONSerialization.data(withJSONObject: self.dimensions, options: [])) ?? Data()
+        defaults.set(dimsData, forKey: "airborne.bg.\(ns).dimensions")
+        defaults.set("in.juspay.airborne.bg.\(ns)", forKey: "airborne.bg.\(ns).bgSessionId")
     }
     
     // MARK: - Private Methods
@@ -327,6 +400,46 @@ extension AirborneServices {
     @objc public func getFileContent(atPath path: String) -> String? {
         return applicationManager?.readPackageFile(path)
     }
+
+    /// Read-only counterpart of Android `Airborne.checkForUpdate()`. Performs an RC
+    /// fetch and reports whether a newer bundle is available, without downloading.
+    /// Resolves on the main queue with a JSON string of the same shape Android returns:
+    ///   `{ "available": Bool, "currentVersion": String, "serverVersion": String,
+    ///      "mandatory": Bool, "error"?: String }`
+    /// Consumers parse it via JSON.parse / safeJsonParse and read the fields.
+    @objc public func checkForUpdate(completion: @escaping (String) -> Void) {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: self.namespace) else {
+            let fallback: [String: Any] = [
+                "available": false,
+                "currentVersion": "",
+                "serverVersion": "",
+                "mandatory": false,
+                "error": "NO_PERSISTED_CONFIG"
+            ]
+            let data = (try? JSONSerialization.data(withJSONObject: fallback, options: [])) ?? Data()
+            completion(String(data: data, encoding: .utf8) ?? "{}")
+            return
+        }
+        coordinator.inspectForUpdate { jsonResult in
+            completion(jsonResult)
+        }
+    }
+
+    /// Foreground download counterpart of Android `Airborne.downloadUpdate(onComplete:)`.
+    /// Runs a synchronous-feeling RC fetch + download + commit cycle using the default
+    /// URLSession (not URLSession.background). Suitable for JS-driven update flows
+    /// where the UI is showing a "Updating..." indicator and waiting for the result.
+    /// Returns `success = true` after temp markers are written; the new bundle becomes
+    /// live on the next user-initiated cold launch.
+    @objc public func downloadUpdate(completion: @escaping (Bool) -> Void) {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: self.namespace) else {
+            completion(false)
+            return
+        }
+        coordinator.startForegroundDownload { success in
+            completion(success)
+        }
+    }
 }
 
 // MARK: - AJPApplicationManagerDelegate Conformance
@@ -346,17 +459,144 @@ extension AirborneServices: AJPApplicationManagerDelegate {
     public func getReleaseConfigHeaders() -> [String : String] {
         self.dimensions
     }
+
+    /**
+     * Forwards the consumer delegate's boot-download preference to the underlying
+     * application manager. Defaults to `true` when the consumer doesn't implement it.
+     */
+    public func enableBootDownload() -> Bool {
+        return self.delegate?.enableBootDownload?() ?? true
+    }
 }
 
 // MARK: - AJPLoggerDelegate Conformance
 
 extension AirborneServices: AJPLoggerDelegate {
-    
+
     /**
      * Handles logging events from the application manager and forwards them to the delegate.
      */
     public func trackEvent(withLevel level: String!, label: String!, key: String!, value: Any!, category: String!, subcategory: String!) {
         let valueDict = value as? [String: Any] ?? [:]
         self.delegate?.onEvent?(level: level, label: label, key: key, value: valueDict, category: category, subcategory: subcategory)
+    }
+}
+
+// MARK: - Silent push entry points
+
+/// AppDelegate forwarders for the silent-push-triggered background bundle download.
+/// Both methods return `true` if the SDK took ownership of the call. When `false`,
+/// the consumer should fall through to other push handlers.
+extension AirborneServices {
+
+    /// Forwarder for `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`.
+    /// Inspects `userInfo` for the OTA notification marker (top-level `notification_type`
+    /// OR `aps.category` equal to `"UPDATE_AVAILABLE"`). If matched, dispatches to all
+    /// registered AirborneServices instances and returns `true`. Otherwise returns `false`.
+    @objc public static func handleSilentPush(
+        userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        guard isAirborneSilentPush(userInfo: userInfo) else {
+            return false
+        }
+
+        let instances = AirborneServices.allRegisteredInstances()
+        if instances.isEmpty {
+            // Push arrived before any AirborneServices was constructed in this process.
+            // Cannot route reliably. Report failure so the consumer falls through.
+            completionHandler(.failed)
+            return true
+        }
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var aggregate: UIBackgroundFetchResult = .failed
+
+        for (ns, _) in instances {
+            guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: ns) else {
+                continue
+            }
+            group.enter()
+            coordinator.startDownloadFromPush { result in
+                lock.lock()
+                switch result {
+                case .newData:
+                    aggregate = .newData
+                case .noData where aggregate != .newData:
+                    aggregate = .noData
+                default:
+                    break
+                }
+                lock.unlock()
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            completionHandler(aggregate)
+        }
+        return true
+    }
+
+    /// Per-instance variant for advanced multi-namespace consumers that route the
+    /// push themselves and want to scope the work to a specific instance.
+    @objc public func handleSilentPush(
+        userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        guard AirborneServices.isAirborneSilentPush(userInfo: userInfo) else {
+            return false
+        }
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: self.namespace) else {
+            completionHandler(.failed)
+            return true
+        }
+        coordinator.startDownloadFromPush { result in
+            DispatchQueue.main.async {
+                completionHandler(result)
+            }
+        }
+        return true
+    }
+
+    /// Forwarder for `application(_:handleEventsForBackgroundURLSession:completionHandler:)`.
+    /// If the identifier is one of ours (`in.juspay.airborne.bg.<namespace>`), reattaches
+    /// the URLSession (so the OS delivers queued events) and stores the system completion
+    /// handler. Returns `true`. Otherwise returns `false`.
+    @objc public static func handleBackgroundURLSession(
+        identifier: String,
+        completionHandler: @escaping () -> Void
+    ) -> Bool {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.coordinator(forBackgroundSessionIdentifier: identifier) else {
+            return false
+        }
+        coordinator.systemCompletionHandler = completionHandler
+        return true
+    }
+
+    private static func isAirborneSilentPush(userInfo: [AnyHashable: Any]) -> Bool {
+        // 1. Top-level `notification_type` — what FCM HTTP v1 with `data: {...}` produces.
+        if let topLevel = userInfo["notification_type"] as? String,
+           topLevel == "UPDATE_AVAILABLE" {
+            return true
+        }
+        if let aps = userInfo["aps"] as? [AnyHashable: Any] {
+            // 2. `aps.category` — iOS-standard category convention.
+            if let category = aps["category"] as? String,
+               category == "UPDATE_AVAILABLE" {
+                return true
+            }
+            // 3. `aps.data.notification_type` — what the NammaYatri backend currently
+            //    uses for cross-platform notification dispatch (matches the existing
+            //    consumer AppDelegate's userNotificationCenter:willPresentNotification:
+            //    extraction at `aps.data.notification_type`).
+            if let data = aps["data"] as? [AnyHashable: Any],
+               let nestedType = data["notification_type"] as? String,
+               nestedType == "UPDATE_AVAILABLE" {
+                return true
+            }
+        }
+        return false
     }
 }
