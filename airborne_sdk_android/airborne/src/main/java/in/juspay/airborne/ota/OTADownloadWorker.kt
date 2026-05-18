@@ -16,12 +16,14 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import `in`.juspay.airborne.HyperOTAServices
 import `in`.juspay.airborne.TrackerCallback
+import `in`.juspay.airborne.utils.OTAUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import kotlin.random.Random
 import android.os.Process as AndroidProcess
 
 /**
@@ -196,7 +198,7 @@ class OTADownloadWorker(
         val services = HyperOTAServices(
             context,
             namespace,
-            "",
+            OTAUtils.hostAppBuildIdentifier(context),
             config.releaseConfigUrl,
             tracker,
             null,
@@ -214,15 +216,26 @@ class OTADownloadWorker(
         private const val WORKER_CONFIG_KEY = "airborne_worker_config"
         private const val MAX_ATTEMPTS = 3
         private const val KILL_DELAY_MS = 500L
+        private const val JITTER_WINDOW_MS = 60_000L
 
         /**
          * Enqueue a background OTA download job.
          * Uses REPLACE so a fresh FCM push always supersedes any stuck-on-no-network job.
          * `UpdateTask` is idempotent per on-disk version via `RUNNING_UPDATE_TASKS`.
+         *
+         * Adds a random 0..JITTER_WINDOW_MS initial delay to de-correlate the
+         * thundering herd: when an FCM push fans out to millions of devices at
+         * once, without jitter every device's first attempt — and every
+         * exponential retry — fires in lockstep and can keep an already-strained
+         * server pinned in 5xx. Jitter on the initial delay smears the whole
+         * retry timeline, since WorkManager's exponential backoff is measured
+         * relative to each worker's own start time.
          */
         fun enqueue(context: Context, namespace: String) {
+            val initialDelayMs = Random.nextLong(0L, JITTER_WINDOW_MS)
             val request = OneTimeWorkRequestBuilder<OTADownloadWorker>()
                 .setInputData(workDataOf(KEY_NAMESPACE to namespace))
+                .setInitialDelay(initialDelayMs, TimeUnit.MILLISECONDS)
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -243,7 +256,7 @@ class OTADownloadWorker(
                     request
                 )
 
-            Log.d(TAG, "Enqueued background download for '$namespace'")
+            Log.d(TAG, "Enqueued background download for '$namespace' (initialDelay=${initialDelayMs}ms)")
         }
     }
 }

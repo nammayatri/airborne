@@ -140,7 +140,15 @@ class ApplicationManager(
                 if (rc == null) {
                     Log.w(TAG, "No release config available (no disk cache, no bundled asset). Skipping load.")
                 } else {
-                    val resolvedIndexPath = getIndexFilePath(rc.pkg.index?.filePath ?: "")
+                    // A stale file matching the bundled index's name could
+                    // survive a partial wipe; force "" so the bundled-assets
+                    // branch below runs instead.
+                    val resolvedIndexPath = if (otaServices.canTrustDisk) {
+                        getIndexFilePath(rc.pkg.index?.filePath ?: "")
+                    } else {
+                        Log.w(TAG, "loadApplication: canTrustDisk=false — forcing bundled assets")
+                        ""
+                    }
                     if (resolvedIndexPath.isEmpty()) {
                         val markerVersion = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
                         if (markerVersion.isEmpty()) {
@@ -411,9 +419,20 @@ class ApplicationManager(
         // TODO big change, need to do server change
         synchronized(lock) {
             try {
-                var rcVersion = readFromInternalStorage(RC_VERSION_FILE_NAME)
-                val (configString, pkgString, resString) = listOf(CONFIG_FILE_NAME, PACKAGE_MANIFEST_FILE_NAME, RESOURCES_FILE_NAME)
-                    .map { readFromInternalStorage(it) }
+                // On a failed upgrade wipe, surviving disk state may belong
+                // to the previous app binary; empty strings force
+                // `loadConfigComponent` onto the bundled fallback.
+                val trustDisk = otaServices.canTrustDisk
+                if (!trustDisk) {
+                    Log.w(TAG, "readReleaseConfig: canTrustDisk=false — forcing bundled")
+                }
+                var rcVersion = if (trustDisk) readFromInternalStorage(RC_VERSION_FILE_NAME) else ""
+                val (configString, pkgString, resString) = if (trustDisk) {
+                    listOf(CONFIG_FILE_NAME, PACKAGE_MANIFEST_FILE_NAME, RESOURCES_FILE_NAME)
+                        .map { readFromInternalStorage(it) }
+                } else {
+                    listOf("", "", "")
+                }
 
                 val bundledRC = if (listOf(configString, pkgString, resString).any { it.isEmpty() }) {
                     val assetContent: String? = try {
@@ -642,6 +661,13 @@ class ApplicationManager(
         timeoutMs: Long = 600_000L,
         onComplete: (success: Boolean) -> Unit
     ) {
+        if (!otaServices.canTrustDisk) {
+            // Installing on top of residual files from a failed wipe would
+            // fuse splits across two app versions.
+            Log.w(TAG, "downloadUpdate: skipped — canTrustDisk=false; deferring until next clean boot")
+            onComplete(false)
+            return
+        }
         if (hasPendingBundleUpdate()) {
             Log.d(TAG, "downloadUpdate: pending update already on disk; skipping re-download")
             onComplete(true)

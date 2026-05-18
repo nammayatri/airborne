@@ -14,6 +14,9 @@
 
 package `in`.juspay.airborne.utils
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Base64
 import android.util.Log
 import java.io.File
@@ -32,6 +35,30 @@ object OTAUtils {
 
     private val sharedPool = ThreadPoolExecutor(6, 10, 5, TimeUnit.SECONDS, LinkedBlockingQueue())
     fun <V> doAsync(callable: Callable<V>): Future<V> = sharedPool.submit(callable)
+
+    /**
+     * Compared against the persisted marker by `OTAServices.firstTimeCleanup`
+     * to detect host APK upgrades. Returns "" on failure, which disables the
+     * cleanup gate rather than wiping on every boot.
+     */
+    @JvmStatic
+    fun hostAppBuildIdentifier(context: Context): String {
+        return try {
+            val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pkgInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION") pkgInfo.versionCode.toLong()
+            }
+            "${pkgInfo.versionName ?: ""}-$versionCode"
+        } catch (e: PackageManager.NameNotFoundException) {
+            Log.e(LOG_TAG, "Failed to read host app build identifier", e)
+            ""
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "Unexpected error reading host app build identifier", e)
+            ""
+        }
+    }
 
     fun runOnBackgroundThread(task: Runnable?) {
         sharedPool.execute(task)

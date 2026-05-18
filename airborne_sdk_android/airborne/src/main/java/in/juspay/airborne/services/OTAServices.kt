@@ -15,6 +15,7 @@
 package `in`.juspay.airborne.services
 
 import android.content.Context
+import android.util.Log
 import `in`.juspay.airborne.TrackerCallback
 import `in`.juspay.airborne.constants.Labels
 import `in`.juspay.airborne.constants.LogCategory
@@ -28,45 +29,82 @@ class OTAServices(private val ctx: Context, val workspace: Workspace, val cleanU
     val remoteAssetService: RemoteAssetService = RemoteAssetService(this)
     var clientId: String? = null
 
+    /**
+     * False when an app-upgrade wipe did not verify clean. Callers gate disk
+     * reads and `downloadUpdate` on this so surviving files from the previous
+     * binary aren't used or extended. Marker is not persisted on failure so
+     * the next boot retries.
+     */
+    @Volatile
+    var canTrustDisk: Boolean = true
+        private set
+
     init {
         firstTimeCleanup()
     }
 
     private fun firstTimeCleanup() {
         val prevBuildId = workspace.getFromSharedPreference(OTAConstants.OTA_BUILD_ID, "__failed")
+        if (prevBuildId == cleanUpValue) {
+            return
+        }
 
-        if (prevBuildId != cleanUpValue) {
+        Log.i(TAG, "firstTimeCleanup: app upgrade detected (prev='$prevBuildId' new='$cleanUpValue'); wiping workspace '${workspace.path}'")
+        trackerCallback.track(
+            LogCategory.LIFECYCLE,
+            LogSubCategory.LifeCycle.AIRBORNE,
+            LogLevel.INFO,
+            Labels.Airborne.FIRST_TIME_SETUP,
+            "started",
+            JSONObject()
+                .put("status", "started")
+                .put("prev_build_id", prevBuildId ?: "")
+                .put("new_build_id", cleanUpValue)
+        )
+
+        val cleanedSuccessfully = try {
+            workspace.clean(ctx)
+        } catch (e: Exception) {
+            Log.e(TAG, "firstTimeCleanup: exception during workspace.clean()", e)
+            trackerCallback.trackAndLogException(
+                TAG,
+                LogCategory.LIFECYCLE,
+                LogSubCategory.LifeCycle.AIRBORNE,
+                Labels.Airborne.FIRST_TIME_SETUP,
+                "Exception in firstTimeCleanUp",
+                e
+            )
+            false
+        }
+
+        if (cleanedSuccessfully) {
+            // Persist marker only after the wipe verified clean — otherwise
+            // next boot skips the retry and loads stale state.
+            workspace.writeToSharedPreference(OTAConstants.OTA_BUILD_ID, cleanUpValue)
+            workspace.removeFromSharedPreference("asset_metadata.json")
+            Log.i(TAG, "firstTimeCleanup: completed; persisted buildId='$cleanUpValue'")
             trackerCallback.track(
                 LogCategory.LIFECYCLE,
                 LogSubCategory.LifeCycle.AIRBORNE,
                 LogLevel.INFO,
                 Labels.Airborne.FIRST_TIME_SETUP,
-                "started",
-                JSONObject().put("status", "started")
+                "completed",
+                JSONObject().put("status", "completed")
             )
-            workspace.writeToSharedPreference(OTAConstants.OTA_BUILD_ID, cleanUpValue)
-            workspace.removeFromSharedPreference("asset_metadata.json")
-            try {
-                ctx.let { workspace.clean(it) }
-                trackerCallback.track(
-                    LogCategory.LIFECYCLE,
-                    LogSubCategory.LifeCycle.AIRBORNE,
-                    LogLevel.INFO,
-                    Labels.Airborne.FIRST_TIME_SETUP,
-                    "completed",
-                    JSONObject().put("status", "completed")
-                )
-            } catch (e: Exception) {
-//                 Handles JSONException and Security exception
-                trackerCallback.trackAndLogException(
-                    TAG,
-                    LogCategory.LIFECYCLE,
-                    LogSubCategory.LifeCycle.AIRBORNE,
-                    Labels.Airborne.FIRST_TIME_SETUP,
-                    "Exception in firstTimeCleanUp",
-                    e
-                )
-            }
+        } else {
+            canTrustDisk = false
+            Log.e(TAG, "firstTimeCleanup: FAILED — wipe did not verify clean; forcing bundled this boot, marker NOT persisted, will retry next boot")
+            trackerCallback.track(
+                LogCategory.LIFECYCLE,
+                LogSubCategory.LifeCycle.AIRBORNE,
+                LogLevel.ERROR,
+                Labels.Airborne.FIRST_TIME_SETUP,
+                "failed_forcing_bundled",
+                JSONObject()
+                    .put("status", "failed_forcing_bundled")
+                    .put("prev_build_id", prevBuildId ?: "")
+                    .put("new_build_id", cleanUpValue)
+            )
         }
     }
 
