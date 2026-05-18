@@ -254,9 +254,152 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         }
     }
 
+    // MARK: - App Upgrade Detection
+
+    /// False when an app-upgrade wipe did not verify clean. Callers gate
+    /// disk reads and downloads on this so surviving files from the previous
+    /// binary aren't used or extended. Marker is not persisted on failure so
+    /// the next boot retries.
+    @objc public private(set) var canTrustDisk: Bool = true
+
+    /// Wipes on-disk OTA state when the host build identifier changes between
+    /// launches. Without this, after an App Store update the SDK would keep
+    /// using the JS bundle OTA'd for the previous app binary — unsafe if the
+    /// new build ships native breaking changes. The marker is persisted only
+    /// on a verified-clean wipe so a partial failure forces bundled and
+    /// retries next boot.
+    private func resetOTAStateIfAppUpgraded() {
+        let currentBuild = hostAppBuildIdentifier()
+        let prefsKey = "AJPApplicationManager.lastSeenAppBuild.\(workspace)"
+        let storedBuild = UserDefaults.standard.string(forKey: prefsKey)
+
+        if storedBuild == currentBuild { return }
+
+        let hasExistingState = otaStateExistsOnDisk()
+
+        if storedBuild == nil && !hasExistingState {
+            UserDefaults.standard.set(currentBuild, forKey: prefsKey)
+            return
+        }
+
+        NSLog("[Airborne] firstTimeCleanup: app upgrade detected (stored='\(storedBuild ?? "<nil>")' current='\(currentBuild)' hasExistingState=\(hasExistingState)); wiping workspace '\(workspace)'")
+
+        let log = NSMutableDictionary()
+        log["stored_build"] = storedBuild ?? "<nil>"
+        log["current_build"] = currentBuild
+        log["has_existing_state"] = hasExistingState
+        self.tracker.trackInfo("app_upgrade_detected", value: log)
+
+        let wipedCleanly = wipeOTAStorage()
+
+        if wipedCleanly {
+            UserDefaults.standard.set(currentBuild, forKey: prefsKey)
+            NSLog("[Airborne] firstTimeCleanup: completed; persisted marker='\(currentBuild)'")
+        } else {
+            self.canTrustDisk = false
+            NSLog("[Airborne] firstTimeCleanup: FAILED — wipe did not verify clean; forcing bundled this boot, marker NOT persisted, will retry next boot")
+            let failLog = NSMutableDictionary()
+            failLog["stored_build"] = storedBuild ?? "<nil>"
+            failLog["current_build"] = currentBuild
+            self.tracker.trackError("app_upgrade_wipe_incomplete_forcing_bundled", value: failLog)
+        }
+    }
+
+    /// Distinguishes a true fresh install (no state, skip wipe) from an
+    /// in-place upgrade from a pre-fix SDK (storedBuild=nil but on-disk
+    /// state exists → still needs wiping).
+    private func otaStateExistsOnDisk() -> Bool {
+        let paths = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true)
+        guard let libraryRoot = paths.first else { return false }
+        let fm = FileManager.default
+
+        let foldersToCheck = [
+            AJPApplicationConstants.JUSPAY_MANIFEST_DIR,
+            AJPApplicationConstants.JUSPAY_PACKAGE_DIR,
+            AJPApplicationConstants.JUSPAY_RESOURCE_DIR
+        ]
+
+        for folder in foldersToCheck {
+            let folderPath = (libraryRoot as NSString).appendingPathComponent(folder)
+            let target = (folderPath as NSString).appendingPathComponent(self.workspace)
+            if fm.fileExists(atPath: target) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Returns an empty-shaped string on Info.plist failure to disable the
+    /// cleanup gate — safer than wiping on every boot.
+    private func hostAppBuildIdentifier() -> String {
+        let info = Bundle.main.infoDictionary
+        let version = (info?["CFBundleShortVersionString"] as? String) ?? ""
+        let build = (info?["CFBundleVersion"] as? String) ?? ""
+        return "\(version)-\(build)"
+    }
+
+    /// Returns true only when every workspace subdirectory is verifiably
+    /// gone afterwards. The post-remove `fileExists` re-check catches silent
+    /// failures where `removeItem` reports success but the path persists.
+    /// Targets the default `AJPFileUtil` layout — hosts injecting a custom
+    /// file util must handle their own paths.
+    private func wipeOTAStorage() -> Bool {
+        let paths = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true)
+        guard let libraryRoot = paths.first else {
+            let log = NSMutableDictionary()
+            log["reason"] = "library_path_unresolvable"
+            self.tracker.trackError("ota_state_wipe_failed", value: log)
+            return false
+        }
+
+        let foldersToWipe = [
+            AJPApplicationConstants.JUSPAY_MANIFEST_DIR,
+            AJPApplicationConstants.JUSPAY_PACKAGE_DIR,
+            AJPApplicationConstants.JUSPAY_RESOURCE_DIR
+        ]
+
+        var allSucceeded = true
+        let fm = FileManager.default
+        for folder in foldersToWipe {
+            let folderPath = (libraryRoot as NSString).appendingPathComponent(folder)
+            let target = (folderPath as NSString).appendingPathComponent(self.workspace)
+            guard fm.fileExists(atPath: target) else { continue }
+            do {
+                try fm.removeItem(atPath: target)
+            } catch {
+                allSucceeded = false
+                NSLog("[Airborne] wipeOTAStorage: removeItem failed for '\(target)': \(error)")
+                let log = NSMutableDictionary()
+                log["folder"] = target
+                log["error"] = "\(error)"
+                self.tracker.trackError("ota_state_wipe_failed", value: log)
+            }
+            // Belt-and-suspenders: confirm the path is actually gone.
+            if fm.fileExists(atPath: target) {
+                allSucceeded = false
+                NSLog("[Airborne] wipeOTAStorage: residual files at '\(target)' after remove")
+                let log = NSMutableDictionary()
+                log["folder"] = target
+                log["reason"] = "residual_after_remove"
+                self.tracker.trackError("ota_state_wipe_failed", value: log)
+            }
+        }
+
+        return allSucceeded
+    }
+
     // MARK: - Placeholder Methods for Next Phase translation
 
     private func initializeDefaults() {
+        self.resetOTAStateIfAppUpgraded()
+
+        // Forcing local-assets mode reuses the existing init branch that
+        // skips `startDownload` (no install on top of residual files) and
+        // runs `cleanUpUnwantedFiles` as a second-chance wipe.
+        if !self.canTrustDisk {
+            self.isLocalAssets = true
+        }
+
         if let util = delegate?.getFileUtil?() as? AJPFileUtil {
             self.fileUtil = util
         } else {
@@ -276,18 +419,20 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         }
         
         self.utils = AJPApplicationManagerUtils(fileUtil: self.fileUtil, tracker: self.tracker, remoteFileUtil: self.remoteFileUtil)
-        
-        // Handle if any previously downloaded packages are available.
-        self.handleTempPackageInstallation()
-        
-        self.package = self.readApplicationPackage()
-        self.resources = self.readApplicationResources()
-        
-        // Handle if any previously downloaded resources are available.
-        self.handleTempResourcesInstallation()
-        
-        self.config = self.readApplicationConfig()
-        
+
+        // Skipping these when canTrustDisk=false leaves package/config/
+        // resources nil so the bundled fallback below loads them from the
+        // new app binary's release_config.json. Also avoids resurrecting
+        // stale half-installed temp state.
+        if self.canTrustDisk {
+            self.handleTempPackageInstallation()
+            self.package = self.readApplicationPackage()
+            self.resources = self.readApplicationResources()
+            self.handleTempResourcesInstallation()
+            self.config = self.readApplicationConfig()
+        }
+
+
         if self.package == nil || self.config == nil || self.resources == nil {
             if let data = try? self.fileUtil.getFileDataFromBundle("release_config.json") {
                 if let manifest = try? AJPApplicationManifest(data: data as NSData) {

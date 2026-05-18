@@ -75,11 +75,22 @@ open class Workspace {
         assetManager = workspace.assetManager
     }
 
-    fun clean(ctx: Context) {
-        if (root.exists()) {
-            OTAUtils.deleteRecursive(root)
-            mkRoot(ctx, path)
+    /**
+     * Returns true only when the workspace is verifiably empty afterwards.
+     * Lets the caller skip persisting the upgrade marker on a partial wipe
+     * so the next boot retries.
+     */
+    fun clean(ctx: Context): Boolean {
+        if (!root.exists()) return true
+        val deletedOk = OTAUtils.deleteRecursive(root)
+        mkRoot(ctx, path)
+        val remaining = root.listFiles()
+        val rootIsEmpty = remaining == null || remaining.isEmpty()
+        val ok = deletedOk && rootIsEmpty
+        if (!ok) {
+            Log.e(TAG, "clean('$path') failed: deleteRecursive=$deletedOk residual=${remaining?.map { it.name }}")
         }
+        return ok
     }
 
     fun open(filePath: String): File = open(root, filePath)

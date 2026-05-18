@@ -85,7 +85,6 @@ jobs:
       contents: write
     env:
       PODSPEC_PATH: airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec
-      AJPLOGGER_HEADER_PATH: scripts/ios-headers/AJPLoggerDelegate.h
       SPEC_REPO_NAME: nammayatri-specs
       SPEC_REPO_URL: https://github.com/nammayatri/ny-cocoapods-specs.git
     steps:
@@ -107,9 +106,6 @@ jobs:
           sed -i '' "s/s.version[[:space:]]*=[[:space:]]*'.*'/s.version          = '${{ github.event.inputs.ios_version }}'/" "$PODSPEC_PATH"
           grep 's.version' "$PODSPEC_PATH" | head -1
 
-      # Mirrors scripts/push-test-artifacts.sh step 2: build the xcframework via the
-      # AirborneAggregate scheme, then patch the in-repo AJPLoggerDelegate.h into both
-      # slices so consumers that import <Airborne/AJPLoggerDelegate.h> resolve.
       - name: Build xcframework
         run: |
           rm -rf /tmp/airborne-build
@@ -120,15 +116,6 @@ jobs:
             -derivedDataPath /tmp/airborne-build \
             -quiet
           test -d /tmp/airborne-build/Build/Products/Airborne.xcframework
-
-      - name: Patch AJPLoggerDelegate.h into xcframework
-        run: |
-          XCF=/tmp/airborne-build/Build/Products/Airborne.xcframework
-          test -f "$AJPLOGGER_HEADER_PATH"
-          cp "$AJPLOGGER_HEADER_PATH" "$XCF/ios-arm64/Airborne.framework/Headers/"
-          cp "$AJPLOGGER_HEADER_PATH" "$XCF/ios-arm64_x86_64-simulator/Airborne.framework/Headers/"
-          ls "$XCF/ios-arm64/Airborne.framework/Headers/" | grep AJPLoggerDelegate
-          ls "$XCF/ios-arm64_x86_64-simulator/Airborne.framework/Headers/" | grep AJPLoggerDelegate
 
       - name: Zip xcframework
         run: |

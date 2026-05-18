@@ -263,8 +263,13 @@ extension AirborneServices {
         else {
             return bundlePath.url(forResource: "main", withExtension: "jsBundle") ?? bundlePath.bundleURL.appendingPathComponent("main.jsBundle")
         }
-            
+
+        // A stale file matching the bundled index's name could survive a
+        // partial upgrade wipe; bypassing the disk lookup serves the bundle.
+        let canTrustDisk = self.applicationManager?.canTrustDisk ?? true
+
         guard
+            canTrustDisk,
             let filePath = self.applicationManager?.getPathForPackageFile(indexFilePath),
             FileManager.default.fileExists(atPath: filePath)
         else {
@@ -275,7 +280,7 @@ extension AirborneServices {
                 return bundlePath.bundleURL.appendingPathComponent(indexFilePath)
             }
         }
-        
+
         return URL(fileURLWithPath: filePath)
     }
     

@@ -7,6 +7,7 @@ import com.jakewharton.processphoenix.ProcessPhoenix
 import `in`.juspay.airborne.HyperOTAServices
 import `in`.juspay.airborne.LazyDownloadCallback
 import `in`.juspay.airborne.TrackerCallback
+import `in`.juspay.airborne.utils.OTAUtils
 import `in`.juspay.hyperutil.constants.LogLevel
 import org.json.JSONObject
 import `in`.juspay.airborne.ota.OTADownloadWorker
@@ -52,7 +53,7 @@ class Airborne(
     private val hyperOTAServices = HyperOTAServices(
         context,
         airborneInterface.getNamespace(),
-        "",
+        OTAUtils.hostAppBuildIdentifier(context),
         releaseConfigUrl,
         trackerCallback,
         this::bootComplete
