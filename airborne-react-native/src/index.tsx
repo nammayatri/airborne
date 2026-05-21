@@ -62,12 +62,12 @@ export function startBackgroundDownload(nameSpace: string): Promise<boolean> {
   return Airborne.startBackgroundDownload(nameSpace);
 }
 
-export function reloadApp(nameSpace: string): Promise<void> {
-  return Airborne.reloadApp(nameSpace);
-}
-
 export function hasPendingBundleUpdate(nameSpace: string): Promise<boolean> {
   return Airborne.hasPendingBundleUpdate(nameSpace);
+}
+
+export function applyPendingBundleUpdate(nameSpace: string): Promise<boolean> {
+  return Airborne.applyPendingBundleUpdate(nameSpace);
 }
 
 export default Airborne;

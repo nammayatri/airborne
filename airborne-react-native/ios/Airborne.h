@@ -12,6 +12,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSString *)getBundlePath;
 - (NSString *)getFileContent:(NSString *)filePath;
 - (NSString *)getReleaseConfig;
+- (void)checkForUpdateWithCompletion:(void (^)(NSString *status))completion;
+- (void)downloadUpdateWithCompletion:(void (^)(BOOL success))completion;
+- (BOOL)hasPendingBundleUpdate;
+- (void)applyPendingBundleUpdateWithCompletion:(void (^)(BOOL success))completion;
 
 @end
 

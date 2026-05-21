@@ -39,6 +39,7 @@
 		DC63767F2F9F2F7E00BE5CD4 /* AJPApplicationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC63767C2F9F2F7E00BE5CD4 /* AJPApplicationManager.swift */; };
 		DC6376812F9F316A00BE5CD4 /* AJPApplicationTracker.h in Headers */ = {isa = PBXBuildFile; fileRef = DC6376802F9F316A00BE5CD4 /* AJPApplicationTracker.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		DC6376832F9F327200BE5CD4 /* AJPApplicationConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6376822F9F327200BE5CD4 /* AJPApplicationConstants.swift */; };
+		BC00F00D000000000000C001 /* AJPBackgroundDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC00F00D000000000000C000 /* AJPBackgroundDownloadCoordinator.swift */; };
 		DC6A9D762F8E3DFB00FE7DF0 /* Airborne.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* Airborne.framework */; };
 		DC6A9D772F8E3DFB00FE7DF0 /* Airborne.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* Airborne.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DC6A9D842F8E53F100FE7DF0 /* AJPHelpers.h in Headers */ = {isa = PBXBuildFile; fileRef = DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -98,6 +99,7 @@
 		DC63767D2F9F2F7E00BE5CD4 /* AJPApplicationManagerUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPApplicationManagerUtils.swift; sourceTree = "<group>"; };
 		DC6376802F9F316A00BE5CD4 /* AJPApplicationTracker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AJPApplicationTracker.h; sourceTree = "<group>"; };
 		DC6376822F9F327200BE5CD4 /* AJPApplicationConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPApplicationConstants.swift; sourceTree = "<group>"; };
+		BC00F00D000000000000C000 /* AJPBackgroundDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPBackgroundDownloadCoordinator.swift; sourceTree = "<group>"; };
 		DC6A9D3A2F8E286700FE7DF0 /* AirborneTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirborneTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC6A9D4F2F8E286900FE7DF0 /* AirborneTestAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AirborneTestAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AJPHelpers.h; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 				DC0904B22FAB031000BD532E /* AJPApplicationManagerDelegate.swift */,
 				DC63767C2F9F2F7E00BE5CD4 /* AJPApplicationManager.swift */,
 				DC63767D2F9F2F7E00BE5CD4 /* AJPApplicationManagerUtils.swift */,
+				BC00F00D000000000000C000 /* AJPBackgroundDownloadCoordinator.swift */,
 				DC2400C92E8BD5C50071EE0E /* Airborne.swift */,
 			);
 			path = AirborneSwift;
@@ -491,6 +494,7 @@
 				DCD493C32F98DD2E000534A0 /* AJPResource.swift in Sources */,
 				DC63767E2F9F2F7E00BE5CD4 /* AJPApplicationManagerUtils.swift in Sources */,
 				DC63767F2F9F2F7E00BE5CD4 /* AJPApplicationManager.swift in Sources */,
+				BC00F00D000000000000C001 /* AJPBackgroundDownloadCoordinator.swift in Sources */,
 				DC6A9D862F8E540300FE7DF0 /* AJPHelpers.m in Sources */,
 				DC0637042F9B74D700CF0345 /* AJPApplicationManifest.swift in Sources */,
 				DC2400E82E8BD5C50071EE0E /* AJPApplicationTracker.m in Sources */,

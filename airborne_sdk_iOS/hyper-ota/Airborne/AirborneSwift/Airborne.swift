@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 #if SWIFT_PACKAGE
 import AirborneObjC
 import AirborneSwiftCore
@@ -60,6 +61,9 @@ import AirborneSwiftModel
      */
     @objc optional func dimensions() -> [String: String]
     
+    /// Return `false` to suppress the boot-time RC fetch + download cycle. Default `true`.
+    @objc optional func enableBootDownload() -> Bool
+
     /**
      * Called when the OTA boot process has completed successfully.
      *
@@ -153,9 +157,44 @@ import AirborneSwiftModel
     private weak var delegate: AirborneDelegate?
     private var applicationManager: AJPApplicationManager?
     private var lazyPackageObserver: NSObjectProtocol?
-    
+
+    // MARK: - Namespace registry (silent-push routing)
+
+    private static var _registry: [String: AirborneServices] = [:]
+    private static let _registryQueue = DispatchQueue(
+        label: "in.juspay.Airborne.bgRegistry",
+        attributes: .concurrent)
+
+    @objc public static func registeredInstance(forNamespace namespace: String) -> AirborneServices? {
+        var result: AirborneServices?
+        _registryQueue.sync {
+            result = _registry[namespace]
+        }
+        return result
+    }
+
+    internal static func allRegisteredInstances() -> [(namespace: String, instance: AirborneServices)] {
+        var result: [(String, AirborneServices)] = []
+        _registryQueue.sync {
+            result = _registry.map { ($0.key, $0.value) }
+        }
+        return result
+    }
+
+    private static func register(_ instance: AirborneServices, forNamespace namespace: String) {
+        _registryQueue.async(flags: .barrier) {
+            _registry[namespace] = instance
+        }
+    }
+
+    private static func unregister(forNamespace namespace: String) {
+        _registryQueue.async(flags: .barrier) {
+            _registry.removeValue(forKey: namespace)
+        }
+    }
+
     // MARK: - Initialization
-    
+
     /**
      * Initializes AirborneServices with a release configuration URL and optional delegate.
      *
@@ -172,8 +211,20 @@ import AirborneSwiftModel
         self.releaseConfigURL = releaseConfigURL
         self.delegate = delegate
         super.init()
+        // Persisted so the bg coordinator can run on push-driven cold launches before init.
+        self.persistBackgroundConfig()
+        AirborneServices.register(self, forNamespace: self.namespace)
         self.setupLazyPackageNotifications()
         self.startApplicationManager()
+    }
+
+    private func persistBackgroundConfig() {
+        let defaults = UserDefaults.standard
+        let ns = self.namespace
+        defaults.set(self.releaseConfigURL, forKey: "airborne.bg.\(ns).rcUrl")
+        let dimsData = (try? JSONSerialization.data(withJSONObject: self.dimensions, options: [])) ?? Data()
+        defaults.set(dimsData, forKey: "airborne.bg.\(ns).dimensions")
+        defaults.set("in.juspay.airborne.bg.\(ns)", forKey: "airborne.bg.\(ns).bgSessionId")
     }
     
     public func getBaseBundle() -> Bundle {
@@ -184,6 +235,7 @@ import AirborneSwiftModel
         if let observer = lazyPackageObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+        AirborneServices.unregister(forNamespace: self.namespace)
     }
     
     // MARK: - Private Methods
@@ -352,6 +404,93 @@ extension AirborneServices: AJPApplicationManagerDelegate {
      */
     public func getReleaseConfigHeaders() -> [String : String] {
         self.dimensions
+    }
+
+    public func enableBootDownload() -> Bool {
+        return self.delegate?.enableBootDownload?() ?? true
+    }
+}
+
+// MARK: - Background download + URLSession entry points
+
+extension AirborneServices {
+
+    /// Kick off a background OTA download. SDK does not inspect the push payload — caller decides.
+    @objc(startBackgroundDownload:completionHandler:)
+    public static func startBackgroundDownload(
+        namespace: String,
+        completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: namespace) else {
+            completionHandler(.failed)
+            return
+        }
+        coordinator.startDownloadFromPush { result in
+            DispatchQueue.main.async {
+                completionHandler(result)
+            }
+        }
+    }
+
+    /// Forward from `application:handleEventsForBackgroundURLSession:`. Returns `true` if it's Airborne's.
+    @objc public static func handleBackgroundURLSession(
+        identifier: String,
+        completionHandler: @escaping () -> Void
+    ) -> Bool {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.coordinator(forBackgroundSessionIdentifier: identifier) else {
+            return false
+        }
+        coordinator.systemCompletionHandler = completionHandler
+        return true
+    }
+}
+
+// MARK: - On-demand checkForUpdate / downloadUpdate
+
+extension AirborneServices {
+
+    /// Resolves on the main queue with JSON of the same shape Android returns:
+    ///   `{ available, currentVersion, serverVersion, mandatory, error? }`.
+    @objc public func checkForUpdate(completion: @escaping (String) -> Void) {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: self.namespace) else {
+            let fallback: [String: Any] = [
+                "available": false,
+                "currentVersion": "",
+                "serverVersion": "",
+                "mandatory": false,
+                "error": "NO_PERSISTED_CONFIG"
+            ]
+            let data = (try? JSONSerialization.data(withJSONObject: fallback, options: [])) ?? Data()
+            completion(String(data: data, encoding: .utf8) ?? "{}")
+            return
+        }
+        coordinator.inspectForUpdate { jsonResult in
+            completion(jsonResult)
+        }
+    }
+
+    /// `success = true` once temp markers are written; swap happens via `applyPendingBundleUpdate` or next cold launch.
+    @objc public func downloadUpdate(completion: @escaping (Bool) -> Void) {
+        guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: self.namespace) else {
+            completion(false)
+            return
+        }
+        coordinator.startForegroundDownload { success in
+            completion(success)
+        }
+    }
+
+    @objc public func hasPendingBundleUpdate() -> Bool {
+        return self.applicationManager?.hasPendingBundleUpdate() ?? false
+    }
+
+    /// Performs the temp→main swap. Does NOT reload — caller triggers the platform reload.
+    @objc public func applyPendingBundleUpdate(completion: @escaping (Bool) -> Void) {
+        guard let manager = self.applicationManager else {
+            completion(false)
+            return
+        }
+        manager.applyPendingBundleUpdate(completion: completion)
     }
 }
 

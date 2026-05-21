@@ -382,10 +382,10 @@ class AJPApplicationManagerUtils {
 
     // MARK: - Networking
 
-    func downloadFileFromURL(_ resourceURL: URL, andSaveInFilePath filePath: String, inFolder folderName: String, checksum: String?) async throws {
+    func downloadFileFromURL(_ resourceURL: URL, andSaveInFilePath filePath: String, inFolder folderName: String, checksum: String?, decompress: Bool) async throws {
         let startTime = Date().timeIntervalSince1970 * 1000
         let storagePath = fileUtil.fullPathInStorageForFilePath(filePath, inFolder: folderName)
-        let (status, _, errorString, _) = await remoteFileUtil.downloadFile(from: resourceURL.absoluteString, andSaveFileAtUrl: storagePath, checksum: checksum)
+        let (status, _, errorString, _) = await remoteFileUtil.downloadFile(from: resourceURL.absoluteString, andSaveFileAtUrl: storagePath, checksum: checksum, decompress: decompress)
         
         if status {
             let logVal = NSMutableDictionary()

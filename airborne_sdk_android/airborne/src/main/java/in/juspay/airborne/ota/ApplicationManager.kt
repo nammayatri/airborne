@@ -522,10 +522,9 @@ class ApplicationManager(
      * effect — V8 has no API to swap the loaded JS in place.
      */
     fun hasPendingBundleUpdate(): Boolean {
-        val loaded = loadedPackageVersion ?: return false
         val onDisk = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
             .takeIf { it.isNotEmpty() } ?: return false
-        return loaded != onDisk
+        return loadedPackageVersion != onDisk
     }
 
     private sealed class RCFetchResult {

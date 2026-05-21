@@ -1,6 +1,7 @@
 #import "AirborneReact.h"
 #import "Airborne.h"
 #import <React/RCTLog.h>
+#import <React/RCTReloadCommand.h>
 #import <Airborne/Airborne-Swift.h>
 
 @implementation AirborneReact
@@ -66,13 +67,27 @@ static NSString * const defaultNamespace = @"default";
 - (void)checkForUpdate:(NSString *)nameSpace
                resolve:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] checkForUpdateWithCompletion:^(NSString *status) {
+            resolve(status);
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 - (void)downloadUpdate:(NSString *)nameSpace
                resolve:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] downloadUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 - (void)startBackgroundDownload:(NSString *)nameSpace
@@ -81,16 +96,35 @@ static NSString * const defaultNamespace = @"default";
     reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);
 }
 
-- (void)reloadApp:(NSString *)nameSpace
-          resolve:(RCTPromiseResolveBlock)resolve
-           reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"reloadApp is not implemented on iOS", nil);
-}
-
 - (void)hasPendingBundleUpdate:(NSString *)nameSpace
                        resolve:(RCTPromiseResolveBlock)resolve
                         reject:(RCTPromiseRejectBlock)reject {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"hasPendingBundleUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        BOOL pending = [[AirborneInstance sharedInstanceWithNamespace:ns] hasPendingBundleUpdate];
+        resolve(@(pending));
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
+}
+
+- (void)applyPendingBundleUpdate:(NSString *)nameSpace
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject {
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] applyPendingBundleUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+            if (success) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    RCTTriggerReloadCommandListeners(@"Airborne: applied pending OTA bundle");
+                });
+            }
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 #else
 RCT_EXPORT_METHOD(readReleaseConfig:(NSString *)nameSpace
@@ -133,13 +167,27 @@ RCT_EXPORT_METHOD(getBundlePath:(NSString *)nameSpace
 RCT_EXPORT_METHOD(checkForUpdate:(NSString *)nameSpace
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"checkForUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] checkForUpdateWithCompletion:^(NSString *status) {
+            resolve(status);
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 RCT_EXPORT_METHOD(downloadUpdate:(NSString *)nameSpace
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"downloadUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] downloadUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 
 RCT_EXPORT_METHOD(startBackgroundDownload:(NSString *)nameSpace
@@ -148,16 +196,35 @@ RCT_EXPORT_METHOD(startBackgroundDownload:(NSString *)nameSpace
     reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);
 }
 
-RCT_EXPORT_METHOD(reloadApp:(NSString *)nameSpace
-                  resolver:(RCTPromiseResolveBlock)resolve
-                  rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"reloadApp is not implemented on iOS", nil);
-}
-
 RCT_EXPORT_METHOD(hasPendingBundleUpdate:(NSString *)nameSpace
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
-    reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"hasPendingBundleUpdate is not implemented on iOS", nil);
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        BOOL pending = [[AirborneInstance sharedInstanceWithNamespace:ns] hasPendingBundleUpdate];
+        resolve(@(pending));
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
+}
+
+RCT_EXPORT_METHOD(applyPendingBundleUpdate:(NSString *)nameSpace
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        [[AirborneInstance sharedInstanceWithNamespace:ns] applyPendingBundleUpdateWithCompletion:^(BOOL success) {
+            resolve(@(success));
+            if (success) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    RCTTriggerReloadCommandListeners(@"Airborne: applied pending OTA bundle");
+                });
+            }
+        }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
 }
 #endif
 

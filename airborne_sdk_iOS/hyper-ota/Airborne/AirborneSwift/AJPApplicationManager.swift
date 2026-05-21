@@ -203,49 +203,77 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
     private init(workspace: String, delegate: AJPApplicationManagerDelegate?, logger: AJPLoggerDelegate?) {
         self.workspace = workspace
         self.delegate = delegate
-        
+
         self.releaseConfigURL = delegate?.getReleaseConfigURL() ?? ""
-        
+        self.releaseConfigURL = AJPApplicationManager.appendStickyTossToURL(self.releaseConfigURL, workspace: workspace)
+
         // Map optionals properly
         if let headers = delegate?.getReleaseConfigHeaders?() as? [String: String] {
             self.releaseConfigHeaders = headers
         } else {
             self.releaseConfigHeaders = [:]
         }
-        
+
         if let bundle = delegate?.getBaseBundle?() {
             self.baseBundle = bundle
         } else {
             self.baseBundle = Bundle.main
         }
-        
+
         self.isLocalAssets = delegate?.shouldUseLocalAssets?() ?? false
         self.forceUpdate = delegate?.shouldDoForceUpdate?() ?? true
-        
+        let enableBootDownload = delegate?.enableBootDownload?() ?? true
+
         self.startTime = Date().timeIntervalSince1970 * 1000
         self.managerId = UUID().uuidString.lowercased()
-        
+
         self.tracker = AJPApplicationTracker(managerId: self.managerId, workspace: workspace)
         self.tracker.addLogger(logger)
-        
+
         super.init()
-        
+
         // Let's fire up initialization
         self.initializeDefaults()
-        
+
         if self.isLocalAssets {
             self.releaseConfigDownloadStatus = .completed
             self.resourceDownloadStatus = .completed
             self.importantPackageDownloadStatus = .completed
             self.lazyPackageDownloadStatus = .completed
             self.cleanUpUnwantedFiles()
-            
+
+            NotificationCenter.default.post(name: AJPApplicationConstants.RELEASE_CONFIG_NOTIFICATION, object: nil, userInfo: [:])
+        } else if !enableBootDownload {
+            self.releaseConfigDownloadStatus = .completed
+            self.resourceDownloadStatus = .completed
+            self.importantPackageDownloadStatus = .completed
+            self.lazyPackageDownloadStatus = .completed
+            // Reclaim orphans even when skipping the fetch — prior splits would leak otherwise.
+            self.cleanUpUnwantedFiles()
+            self.tracker.trackInfo("boot_download_disabled", value: NSMutableDictionary())
             NotificationCenter.default.post(name: AJPApplicationConstants.RELEASE_CONFIG_NOTIFICATION, object: nil, userInfo: [:])
         } else {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 self?.startDownload()
             }
         }
+    }
+
+    /// Per-workspace sticky UUID stored in UserDefaults so retries across launches use the same ID.
+    static func appendStickyTossToURL(_ url: String, workspace: String) -> String {
+        guard !url.isEmpty else { return url }
+        let tossKey = "airborne.toss.\(workspace)"
+        let defaults = UserDefaults.standard
+        let toss: String
+        if let existing = defaults.string(forKey: tossKey), !existing.isEmpty {
+            toss = existing
+        } else {
+            toss = UUID().uuidString
+            defaults.set(toss, forKey: tossKey)
+        }
+        let encoded = toss.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? toss
+        let separator = url.contains("?") ? "&" : "?"
+        return "\(url)\(separator)toss=\(encoded)"
     }
     
     deinit {
@@ -429,6 +457,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
             self.package = self.readApplicationPackage()
             self.resources = self.readApplicationResources()
             self.handleTempResourcesInstallation()
+            self.cleanupStaleBgPendingIfNeeded()
             self.config = self.readApplicationConfig()
         }
 
@@ -581,7 +610,11 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
             let sMap = NSMutableDictionary()
             sMap["count"] = tempResources.resources.count
             tracker.trackInfo("temp_resources_installation_started", value: sMap)
-            
+
+            // Fresh install + bg-download can land here before self.resources is initialized.
+            if self.resources == nil {
+                self.resources = AJPApplicationResources()
+            }
             var updatedAvailableResources = self.resources.resources
             
             // Move all resources from temp to main
@@ -608,7 +641,76 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
             try? fileUtil.deleteFile(AJPApplicationConstants.APP_TEMP_RESOURCES_DATA_FILE_NAME, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
         }
     }
-    
+
+    // MARK: - On-demand temp swap (popup-driven update flow)
+
+    @objc public func hasPendingBundleUpdate() -> Bool {
+        let fm = FileManager.default
+        let tempPackagePath = fileUtil.fullPathInStorageForFilePath(
+            AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
+            inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR
+        )
+        let tempResourcesPath = fileUtil.fullPathInStorageForFilePath(
+            AJPApplicationConstants.APP_TEMP_RESOURCES_DATA_FILE_NAME,
+            inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR
+        )
+
+        // Decode rather than stat-check — a corrupted temp would crash-loop the JS bundle.
+        if fm.fileExists(atPath: tempPackagePath) {
+            if let pkg = (try? fileUtil.getDecodedInstanceForClass(
+                AJPApplicationPackage.self,
+                withContentOfFileName: AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
+                inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)) as? AJPApplicationPackage,
+               !pkg.version.isEmpty {
+                return true
+            }
+            let infoMap = NSMutableDictionary()
+            infoMap["reason"] = "corrupted_app_pkg_temp"
+            tracker.trackError("pending_bundle_purged", value: infoMap)
+            try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
+                                      inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        }
+
+        // Resources-only update path: package unchanged but resources changed.
+        if fm.fileExists(atPath: tempResourcesPath) {
+            if let res = (try? fileUtil.getDecodedInstanceForClass(
+                AJPApplicationResources.self,
+                withContentOfFileName: AJPApplicationConstants.APP_TEMP_RESOURCES_DATA_FILE_NAME,
+                inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)) as? AJPApplicationResources,
+               res.resources.count > 0 {
+                return true
+            }
+            let infoMap = NSMutableDictionary()
+            infoMap["reason"] = "corrupted_app_resources_temp"
+            tracker.trackError("pending_bundle_purged", value: infoMap)
+            try? fileUtil.deleteFile(AJPApplicationConstants.APP_TEMP_RESOURCES_DATA_FILE_NAME,
+                                      inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        }
+
+        return false
+    }
+
+    @objc public func applyPendingBundleUpdate(completion: @escaping (Bool) -> Void) {
+        guard hasPendingBundleUpdate() else {
+            completion(false)
+            return
+        }
+        self.handleTempPackageInstallation()
+        self.handleTempResourcesInstallation()
+        if let refreshedPackage = self.readApplicationPackage() {
+            self.package = refreshedPackage
+        }
+        if let refreshedResources = self.readApplicationResources() {
+            self.resources = refreshedResources
+        }
+        // Bypass the once-per-launch flag — orphan reclaim must run on swap too.
+        self.performUnwantedFilesCleanup()
+        let infoMap = NSMutableDictionary()
+        infoMap["package_version"] = self.package?.version ?? ""
+        tracker.trackInfo("on_demand_temp_swap_applied", value: infoMap)
+        completion(!hasPendingBundleUpdate())
+    }
+
     private func initializeLazyResourcesDownloadStatus() {
         let storedPackagePath = fileUtil.fullPathInStorageForFilePath(AJPApplicationConstants.APP_PACKAGE_DATA_FILE_NAME, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
         AJPApplicationManager.isFirstRunAfterInstallation = !FileManager.default.fileExists(atPath: storedPackagePath)
@@ -928,40 +1030,44 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
     private func cleanUpUnwantedFiles() {
         if AJPApplicationManager.isFirstRunAfterAppLaunch {
             AJPApplicationManager.isFirstRunAfterAppLaunch = false
-            
-            let allPackageFiles = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_PACKAGE_DIR, subFolder: AJPApplicationConstants.JUSPAY_MAIN_DIR, includeSubfolders: true)
-            var requiredFiles = Set<String>()
-            
-            for resource in self.package.allSplits() {
+            performUnwantedFilesCleanup()
+        }
+    }
+
+    /// Bypasses the once-per-launch flag so the on-demand swap path can also call it.
+    private func performUnwantedFilesCleanup() {
+        let allPackageFiles = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_PACKAGE_DIR, subFolder: AJPApplicationConstants.JUSPAY_MAIN_DIR, includeSubfolders: true)
+        var requiredFiles = Set<String>()
+
+        for resource in self.package.allSplits() {
+            requiredFiles.insert(utils.jsFileName(for: resource.filePath))
+        }
+
+        if let downloadedManifest = self.downloadedApplicationManifest {
+            let dlPackage = downloadedManifest.package
+            for resource in dlPackage.allSplits() {
                 requiredFiles.insert(utils.jsFileName(for: resource.filePath))
             }
-            
-            if let downloadedManifest = self.downloadedApplicationManifest {
-                let dlPackage = downloadedManifest.package
-                for resource in dlPackage.allSplits() {
-                    requiredFiles.insert(utils.jsFileName(for: resource.filePath))
-                }
+        }
+
+        let resourcesData = self.resources.resources
+        for (_, resource) in resourcesData {
+            requiredFiles.insert(utils.jsFileName(for: resource.filePath))
+        }
+
+        for fileName in allPackageFiles {
+            let shouldKeep = requiredFiles.contains(fileName)
+            if !shouldKeep {
+                let map = NSMutableDictionary()
+                map["file"] = fileName
+                tracker.trackInfo("cleaning_unused_file", value: map)
+                utils.deleteFile(fileName, subFolder: AJPApplicationConstants.JUSPAY_MAIN_DIR, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR)
             }
-            
-            let resourcesData = self.resources.resources
-            for (_, resource) in resourcesData {
-                requiredFiles.insert(utils.jsFileName(for: resource.filePath))
-            }
-            
-            for fileName in allPackageFiles {
-                let shouldKeep = requiredFiles.contains(fileName)
-                if !shouldKeep {
-                    let map = NSMutableDictionary()
-                    map["file"] = fileName
-                    tracker.trackInfo("cleaning_unused_file", value: map)
-                    utils.deleteFile(fileName, subFolder: AJPApplicationConstants.JUSPAY_MAIN_DIR, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR)
-                }
-            }
-            
-            let resourceFileNames = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_RESOURCE_DIR, subFolder: "", includeSubfolders: true)
-            for fileName in resourceFileNames {
-                utils.deleteFile(fileName, subFolder: "", inFolder: AJPApplicationConstants.JUSPAY_RESOURCE_DIR)
-            }
+        }
+
+        let resourceFileNames = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_RESOURCE_DIR, subFolder: "", includeSubfolders: true)
+        for fileName in resourceFileNames {
+            utils.deleteFile(fileName, subFolder: "", inFolder: AJPApplicationConstants.JUSPAY_RESOURCE_DIR)
         }
     }
     
@@ -1011,7 +1117,23 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
     
     private func tryDownloadingUpdate() {
         guard let downloadedManifest = self.downloadedApplicationManifest else { return }
-        
+
+        // Skip the foreground cycle while a push-driven bg is in flight — JuspayPackages/temp race.
+        let bgPendingPath = fileUtil.fullPathInStorageForFilePath(
+            AJPApplicationConstants.APP_BG_PENDING_DATA_FILE_NAME,
+            inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        if FileManager.default.fileExists(atPath: bgPendingPath) {
+            let map = NSMutableDictionary()
+            map["reason"] = "app-bg-pending.dat present"
+            self.tracker.trackInfo("foreground_skipped_due_to_bg_in_flight", value: map)
+            self.releaseConfigDownloadStatus = .completed
+            self.importantPackageDownloadStatus = .completed
+            self.resourceDownloadStatus = .completed
+            self.lazyPackageDownloadStatus = .completed
+            self.fireCallbacks()
+            return
+        }
+
         // Package download
         Task { [weak self] in
             guard let self = self else { return }
@@ -1176,12 +1298,16 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         #endif
         request.setValue(self.package.version, forHTTPHeaderField: "x-package-version")
         request.setValue(self.config.version, forHTTPHeaderField: "x-config-version")
-        
+
+        request.setValue("no-cache", forHTTPHeaderField: "cache-control")
+
         var dimensions = ""
-        for (key, value) in self.releaseConfigHeaders {
-            dimensions.append("\(key)=\(value);")
+        for key in self.releaseConfigHeaders.keys.sorted() {
+            if let value = self.releaseConfigHeaders[key] {
+                dimensions.append("\(key)=\(value);")
+            }
         }
-        
+
         if !dimensions.isEmpty {
             request.setValue(dimensions, forHTTPHeaderField: "x-dimension")
         }
@@ -1312,7 +1438,8 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                     let tempPath = "\(AJPApplicationConstants.JUSPAY_TEMP_DIR)/\(fileName)"
                     
                     do {
-                        try await self.utils.downloadFileFromURL(split.url, andSaveInFilePath: tempPath, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR, checksum: split.checksum)
+                        let shouldDecompress = split.url == newManifest.index.url
+                        try await self.utils.downloadFileFromURL(split.url, andSaveInFilePath: tempPath, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR, checksum: split.checksum, decompress: shouldDecompress)
                         let _ = downloadLock.withLock {
                             pendingDownloads.remove(split.filePath)
                         }
@@ -1348,6 +1475,10 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 self.utils.cleanupTempDirectory()
                 resultDownloadFailed = true
             } else if timeoutOccurred || !self.forceUpdate {
+                // Persist temp marker so next boot promotes splits that finished after we returned.
+                if timeoutOccurred && self.forceUpdate {
+                    utils.updatePackageInTemp(newManifest)
+                }
                 let map = NSMutableDictionary()
                 map["timeoutOccurred"] = timeoutOccurred
                 map["forceUpdate"] = self.forceUpdate
@@ -1429,7 +1560,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                     let tempFilePath = "\(AJPApplicationConstants.JUSPAY_TEMP_DIR)/\(split.filePath)"
                     
                     do {
-                        try await self.utils.downloadFileFromURL(split.url, andSaveInFilePath: tempFilePath, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR, checksum: split.checksum)
+                        try await self.utils.downloadFileFromURL(split.url, andSaveInFilePath: tempFilePath, inFolder: AJPApplicationConstants.JUSPAY_PACKAGE_DIR, checksum: split.checksum, decompress: false)
                         singleDownloadHandler(true, split)
                     } catch {
                         let map = NSMutableDictionary()
@@ -1608,7 +1739,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                     if self.bootTimeoutOccurred { return }
                     
                     do {
-                        try await self.utils.downloadFileFromURL(resource.url, andSaveInFilePath: resource.filePath, inFolder: AJPApplicationConstants.JUSPAY_RESOURCE_DIR, checksum: resource.checksum)
+                        try await self.utils.downloadFileFromURL(resource.url, andSaveInFilePath: resource.filePath, inFolder: AJPApplicationConstants.JUSPAY_RESOURCE_DIR, checksum: resource.checksum, decompress: false)
                         
                         if !self.bootTimeoutOccurred {
                             // Success - move to main and update available resources
@@ -1680,5 +1811,9 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 tracker.trackError("temp_resource_save_failed", value: map)
             }
         }
+    }
+
+    private func cleanupStaleBgPendingIfNeeded() {
+        AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: workspace)?.cleanupStaleStateIfNeeded()
     }
 }

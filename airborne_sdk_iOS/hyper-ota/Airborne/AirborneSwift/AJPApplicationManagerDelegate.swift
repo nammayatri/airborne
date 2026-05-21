@@ -85,6 +85,10 @@ import AirborneSwiftCore
      *         NO otherwise. Default is YES.
      */
     @objc optional func shouldDoForceUpdate() -> Bool
+
+    /// Return `false` to suppress the boot-time RC fetch + download cycle.
+    /// Default `true`.
+    @objc optional func enableBootDownload() -> Bool
     
     /**
      * Returns the file utility instance for local file operations.

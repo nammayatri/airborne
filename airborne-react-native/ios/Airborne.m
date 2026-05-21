@@ -79,6 +79,37 @@ static void AirborneEnsureRegistry(void) {
     return [self.airborne getReleaseConfig];
 }
 
+- (void)checkForUpdateWithCompletion:(void (^)(NSString *status))completion {
+    if (self.airborne == nil) {
+        completion(@"AIRBORNE_NOT_INITIALIZED");
+        return;
+    }
+    [self.airborne checkForUpdateWithCompletion:completion];
+}
+
+- (void)downloadUpdateWithCompletion:(void (^)(BOOL success))completion {
+    if (self.airborne == nil) {
+        completion(NO);
+        return;
+    }
+    [self.airborne downloadUpdateWithCompletion:completion];
+}
+
+- (BOOL)hasPendingBundleUpdate {
+    if (self.airborne == nil) {
+        return NO;
+    }
+    return [self.airborne hasPendingBundleUpdate];
+}
+
+- (void)applyPendingBundleUpdateWithCompletion:(void (^)(BOOL success))completion {
+    if (self.airborne == nil) {
+        completion(NO);
+        return;
+    }
+    [self.airborne applyPendingBundleUpdateWithCompletion:completion];
+}
+
 #pragma mark - AirborneDelegate
 
 - (NSString *)namespace {
