@@ -22,8 +22,8 @@ export interface Spec extends TurboModule {
   checkForUpdate(nameSpace: string): Promise<string>;
   downloadUpdate(nameSpace: string): Promise<boolean>;
   startBackgroundDownload(nameSpace: string): Promise<boolean>;
-  reloadApp(nameSpace: string): Promise<void>;
   hasPendingBundleUpdate(nameSpace: string): Promise<boolean>;
+  applyPendingBundleUpdate(nameSpace: string): Promise<boolean>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Airborne');

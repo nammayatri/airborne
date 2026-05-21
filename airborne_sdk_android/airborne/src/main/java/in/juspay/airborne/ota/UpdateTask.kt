@@ -644,7 +644,7 @@ internal class UpdateTask(
                         if (it.isDownloaded == true) {
                             Result.Ok(Unit)
                         } else {
-                            downloadFile(tw, it.url, it.filePath, it.checksum)
+                            downloadFile(tw, it.url, it.filePath, it.checksum, decompress = it.url == fetched.index?.url)
                         }
                     }
                 }
@@ -730,7 +730,7 @@ internal class UpdateTask(
                         val result = if (it.isDownloaded == true) {
                             Result.Ok(Unit)
                         } else {
-                            downloadFile(tw, it.url, it.filePath, it.checksum)
+                            downloadFile(tw, it.url, it.filePath, it.checksum, decompress = false)
                         }
                         downloadCallback(tw, it.filePath, result is Result.Ok)
                         result
@@ -856,7 +856,8 @@ internal class UpdateTask(
         tempWriter: TempWriter,
         url: URL,
         filePathToSaveIn: String,
-        checksum: String
+        checksum: String,
+        decompress: Boolean
     ): Result<Unit> {
         Log.d(TAG, "downloadFile $url")
         val startTime = System.currentTimeMillis()
@@ -885,12 +886,16 @@ internal class UpdateTask(
                         }
                     }
 
-                    val toWrite = try {
-                        Compression.maybeDecompressZip(extracted)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to decompress OTA payload $filePathToSaveIn", e)
-                        trackFileWriteError(filePathToSaveIn, e)
-                        return Result.Error()
+                    val toWrite = if (decompress) {
+                        try {
+                            Compression.maybeDecompressZip(extracted)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to decompress OTA payload $filePathToSaveIn", e)
+                            trackFileWriteError(filePathToSaveIn, e)
+                            return Result.Error()
+                        }
+                    } else {
+                        extracted
                     }
 
                     if (tempWriter.write(filePathToSaveIn, toWrite)) {
@@ -1141,7 +1146,7 @@ internal class UpdateTask(
                         Result.Ok(Pair(resource, savedResourcesInfo.first))
                     } else {
                         Log.d(TAG, "Downloading resource: ${resource.filePath}")
-                        val result = downloadFile(tempWriter, resource.url, resource.filePath, resource.checksum)
+                        val result = downloadFile(tempWriter, resource.url, resource.filePath, resource.checksum, decompress = false)
                         if (result is Result.Ok) {
                             Result.Ok(Pair(resource, tempWriter))
                         } else {

@@ -60,7 +60,8 @@ public typealias AJPDownloadCallback = @convention(block) (Bool, Data?, String?,
             let (status, data, error, response) = await self.downloadFile(
                 from: remoteURL,
                 andSaveFileAtUrl: localURL,
-                checksum: expectedChecksum
+                checksum: expectedChecksum,
+                decompress: true
             )
             callback(status, data, error, response)
         }
@@ -93,7 +94,8 @@ public typealias AJPDownloadCallback = @convention(block) (Bool, Data?, String?,
             let (status, data, error, response) = await self.downloadFile(
                 from: remoteURL,
                 andSaveFileAtUrl: localURL,
-                checksum: expectedChecksum
+                checksum: expectedChecksum,
+                decompress: true
             )
             callback(status, data, error, response)
         }
@@ -121,7 +123,8 @@ public typealias AJPDownloadCallback = @convention(block) (Bool, Data?, String?,
     open func downloadFile(
         from remoteURL: String,
         andSaveFileAtUrl localURL: String,
-        checksum expectedChecksum: String?
+        checksum expectedChecksum: String?,
+        decompress: Bool
     ) async -> (Bool, Data?, String?, URLResponse?) {
         let (response, responseData, networkError) = await networkClient.fetchResourceAsync(remoteURL)
         
@@ -148,15 +151,19 @@ public typealias AJPDownloadCallback = @convention(block) (Bool, Data?, String?,
             }
         }
         let payload: Data
-        do {
-            payload = try AJPCompression.maybeDecompressZip(fileData)
-        } catch {
-            return (
-                false,
-                nil,
-                "Failed to decompress OTA payload from \(remoteURL): \(error)",
-                response
-            )
+        if decompress {
+            do {
+                payload = try AJPCompression.maybeDecompressZip(fileData)
+            } catch {
+                return (
+                    false,
+                    nil,
+                    "Failed to decompress OTA payload from \(remoteURL): \(error)",
+                    response
+                )
+            }
+        } else {
+            payload = fileData
         }
 
         // Write file to disk atomically

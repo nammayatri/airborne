@@ -47,13 +47,13 @@ class AirborneModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun reloadApp(namespace: String, promise: Promise) {
-    implementation.reloadApp(namespace, promise)
+  fun hasPendingBundleUpdate(namespace: String, promise: Promise) {
+    implementation.hasPendingBundleUpdate(namespace, promise)
   }
 
   @ReactMethod
-  fun hasPendingBundleUpdate(namespace: String, promise: Promise) {
-    implementation.hasPendingBundleUpdate(namespace, promise)
+  fun applyPendingBundleUpdate(namespace: String, promise: Promise) {
+    implementation.applyPendingBundleUpdate(namespace, promise)
   }
 
   companion object {

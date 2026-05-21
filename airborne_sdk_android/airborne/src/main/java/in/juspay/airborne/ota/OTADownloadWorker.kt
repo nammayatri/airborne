@@ -215,7 +215,7 @@ class OTADownloadWorker(
         private const val WORK_TAG = "airborne_ota"
         private const val WORKER_CONFIG_KEY = "airborne_worker_config"
         private const val MAX_ATTEMPTS = 3
-        private const val KILL_DELAY_MS = 500L
+        private const val KILL_DELAY_MS = 1000L
         private const val JITTER_WINDOW_MS = 60_000L
 
         /**

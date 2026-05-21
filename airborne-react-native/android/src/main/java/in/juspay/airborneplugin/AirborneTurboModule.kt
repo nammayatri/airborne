@@ -38,12 +38,12 @@ class AirborneTurboModule(reactContext: ReactApplicationContext) :
     implementation.startBackgroundDownload(nameSpace, promise)
   }
 
-  override fun reloadApp(nameSpace: String, promise: Promise) {
-    implementation.reloadApp(nameSpace, promise)
-  }
-
   override fun hasPendingBundleUpdate(nameSpace: String, promise: Promise) {
     implementation.hasPendingBundleUpdate(nameSpace, promise)
+  }
+
+  override fun applyPendingBundleUpdate(nameSpace: String, promise: Promise) {
+    implementation.applyPendingBundleUpdate(nameSpace, promise)
   }
 
   companion object {

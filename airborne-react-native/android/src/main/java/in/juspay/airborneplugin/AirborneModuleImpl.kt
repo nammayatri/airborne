@@ -2,10 +2,8 @@ package `in`.juspay.airborneplugin
 
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.Promise
-import com.jakewharton.processphoenix.ProcessPhoenix
 import `in`.juspay.airborne.utils.OTAUtils
 
 /**
@@ -94,19 +92,19 @@ class AirborneModuleImpl(private val reactContext: ReactApplicationContext) {
         }
     }
 
-    fun reloadApp(namespace: String, promise: Promise) {
+    fun applyPendingBundleUpdate(namespace: String, promise: Promise) {
         try {
-            promise.resolve(null)
-
+            val airborne = Airborne.airborneObjectMap[namespace]
+            if (airborne == null || !airborne.hasPendingBundleUpdate()) {
+                promise.resolve(false)
+                return
+            }
+            promise.resolve(true)
             Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    ProcessPhoenix.triggerRebirth(reactContext.applicationContext)
-                } catch (e: Exception) {
-                    Log.e("AIRBORNE_ERROR", "Failed to reload app", e)
-                }
+                Airborne.applyPendingBundleUpdate(reactContext.applicationContext, namespace)
             }, 200)
         } catch (e: Exception) {
-            promise.reject("AIRBORNE_ERROR", "Failed to reload app: ${e.message}", e)
+            promise.reject("AIRBORNE_ERROR", "Failed to apply pending bundle update: ${e.message}", e)
         }
     }
 }
