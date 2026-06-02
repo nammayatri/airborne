@@ -16,15 +16,19 @@ import Foundation
 
     public static let JUSPAY_MAIN_DIR = "main"
     public static let JUSPAY_TEMP_DIR = "temp"
+    public static let JUSPAY_PREV_DIR = "prev"
 
     // MARK: - File Names
     public static let APP_CONFIG_DATA_FILE_NAME = "app-config.dat"
+    public static let APP_CONFIG_DATA_PREV_FILE_NAME = "app-config-prev.dat"
     public static let APP_MANIFEST_DATA_TEMP_FILE_NAME = "app-manifest-temp.dat"
 
     public static let APP_PACKAGE_DATA_FILE_NAME = "app-pkg.dat"
     public static let APP_PACKAGE_DATA_TEMP_FILE_NAME = "app-pkg-temp.dat"
+    public static let APP_PACKAGE_DATA_PREV_FILE_NAME = "app-pkg-prev.dat"
 
     public static let APP_RESOURCES_DATA_FILE_NAME = "app-resources.dat"
+    public static let APP_RESOURCES_DATA_PREV_FILE_NAME = "app-resources-prev.dat"
     public static let APP_OLD_RESOURCES_DATA_FILE_NAME = "app-resources-old.dat"
     public static let APP_TEMP_RESOURCES_DATA_FILE_NAME = "app-resources-temp.dat"
 

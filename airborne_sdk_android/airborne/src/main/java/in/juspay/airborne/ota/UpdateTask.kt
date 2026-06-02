@@ -75,6 +75,7 @@ internal class UpdateTask(
     private val fileLock: Any,
     private val tracker: TrackerCallback,
     private val netUtils: NetUtils,
+    private val rollbackStore: RollbackStore,
     rcHeaders: Map<String, String>? = null,
     private val lazyDownloadCallback: LazyDownloadCallback?,
     private val fromAirborne: Boolean = true,
@@ -465,6 +466,14 @@ internal class UpdateTask(
         pkg: ReleaseConfig.PackageManifest,
         startTime: Long
     ): Boolean {
+        if (rollbackStore.isFailed(pkg.version)) {
+            Log.w(TAG, "Skipping install of quarantined version ${pkg.version}.")
+            trackPackageUpdateResult(Result.Error.CustomError("version quarantined"), startTime)
+            return false
+        }
+        rollbackStore.snapshotActiveAsPrev()
+        rollbackStore.beginTrial(pkg.version)
+
         val didCopy = copyFilesAsync(tw, "$APP_DIR/$PACKAGE_DIR_NAME")
         if (didCopy) {
             Log.d(TAG, "Copied important splits.")
@@ -607,6 +616,10 @@ internal class UpdateTask(
 
     private fun downloadPackageUpdate(fetched: Package): Update.Package {
         val local = localReleaseConfig?.pkg
+        if (rollbackStore.isFailed(fetched.version)) {
+            Log.d(TAG, "Fetched version ${fetched.version} is quarantined; skipping download.")
+            return Update.Package.NA
+        }
         if (local?.version == fetched.version) {
             trackInfo(
                 "important_package_update_info",

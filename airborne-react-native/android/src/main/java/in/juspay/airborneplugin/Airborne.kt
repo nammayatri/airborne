@@ -157,6 +157,17 @@ class Airborne(
     }
 
     /**
+     * Confirm the currently-loaded OTA bundle rendered successfully. Promotes
+     * it to the last-known-good and drops the retained previous bundle. Hosts
+     * must call this from JS after the first successful render; if it is never
+     * called, the SDK reverts to the previous good bundle after a few boots.
+     */
+    @Keep
+    fun markBundleSafe() {
+        applicationManager.markBundleSafe()
+    }
+
+    /**
      * True when a newer bundle is committed to disk but the running JS in V8
      * is still the boot-time one. Hosts should check this on
      * `MainActivity.onCreate` and force a process restart when true — required

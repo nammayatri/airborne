@@ -112,6 +112,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
     private let sessionLock = NSLock()
     private var _bgSession: URLSession?
     private var loggerAttached = false
+    private let rollbackStore: AJPRollbackStore
 
     /// Invoked after urlSessionDidFinishEvents finalizes installation.
     @objc public var systemCompletionHandler: (() -> Void)?
@@ -122,6 +123,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
         self.fileUtil = AJPFileUtil(workspace: namespace, baseBundle: nil)
         self.stateQueue = DispatchQueue(label: "in.juspay.airborne.bg.\(namespace).state")
         self.tracker = AJPApplicationTracker(managerId: UUID().uuidString.lowercased(), workspace: namespace)
+        self.rollbackStore = AJPRollbackStore(workspace: namespace, fileUtil: self.fileUtil, tracker: self.tracker)
         super.init()
     }
 
@@ -305,6 +307,11 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
     }
 
     private func continuePushFlow(with newManifest: AJPApplicationManifest, fetchHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if rollbackStore.isFailed(newManifest.package.version) {
+            trackInfo("bg_download_quarantined", value: ["target_package_version": newManifest.package.version])
+            fetchHandler(.noData)
+            return
+        }
         let currentPackage = readCurrentPackage()
         let currentResources = readCurrentResources()
 
@@ -617,7 +624,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
             } else if let value = manifest.config.properties["mandatory"] as? Bool {
                 mandatory = value
             }
-            let available = baseline.isEmpty || baseline != serverVersion
+            let available = (baseline.isEmpty || baseline != serverVersion) && !self.rollbackStore.isFailed(serverVersion)
 
             let result: [String: Any] = [
                 "available": available,
@@ -710,6 +717,11 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 return
             }
 
+            if self.rollbackStore.isFailed(manifest.package.version) {
+                self.trackInfo("foreground_download_quarantined", value: ["target_package_version": manifest.package.version])
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
             let currentPackage = self.readCurrentPackage()
             let currentResources = self.readCurrentResources()
             let importants = self.importantSplitsToDownload(newPackage: manifest.package, currentPackage: currentPackage)

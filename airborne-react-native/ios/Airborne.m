@@ -110,6 +110,13 @@ static void AirborneEnsureRegistry(void) {
     [self.airborne applyPendingBundleUpdateWithCompletion:completion];
 }
 
+- (void)markBundleSafe {
+    if (self.airborne == nil) {
+        return;
+    }
+    [self.airborne markBundleSafe];
+}
+
 #pragma mark - AirborneDelegate
 
 - (NSString *)namespace {

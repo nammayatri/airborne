@@ -90,6 +90,20 @@ static NSString * const defaultNamespace = @"default";
     }
 }
 
+- (void)markBundleSafe:(NSString *)nameSpace
+               resolve:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject {
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            [[AirborneInstance sharedInstanceWithNamespace:ns] markBundleSafe];
+            resolve(nil);
+        });
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
+}
+
 - (void)startBackgroundDownload:(NSString *)nameSpace
                         resolve:(RCTPromiseResolveBlock)resolve
                          reject:(RCTPromiseRejectBlock)reject {
@@ -185,6 +199,20 @@ RCT_EXPORT_METHOD(downloadUpdate:(NSString *)nameSpace
         [[AirborneInstance sharedInstanceWithNamespace:ns] downloadUpdateWithCompletion:^(BOOL success) {
             resolve(@(success));
         }];
+    } @catch (NSException *exception) {
+        reject(@"AIRBORNE_ERROR", exception.reason, nil);
+    }
+}
+
+RCT_EXPORT_METHOD(markBundleSafe:(NSString *)nameSpace
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    @try {
+        NSString *ns = (nameSpace.length > 0) ? nameSpace : defaultNamespace;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            [[AirborneInstance sharedInstanceWithNamespace:ns] markBundleSafe];
+            resolve(nil);
+        });
     } @catch (NSException *exception) {
         reject(@"AIRBORNE_ERROR", exception.reason, nil);
     }

@@ -21,6 +21,7 @@ export interface Spec extends TurboModule {
   getBundlePath(nameSpace: string): Promise<string>;
   checkForUpdate(nameSpace: string): Promise<string>;
   downloadUpdate(nameSpace: string): Promise<boolean>;
+  markBundleSafe(nameSpace: string): Promise<void>;
   startBackgroundDownload(nameSpace: string): Promise<boolean>;
   hasPendingBundleUpdate(nameSpace: string): Promise<boolean>;
   applyPendingBundleUpdate(nameSpace: string): Promise<boolean>;

@@ -22,6 +22,7 @@ import `in`.juspay.airborne.constants.LogCategory
 import `in`.juspay.airborne.constants.LogLevel
 import `in`.juspay.airborne.constants.LogSubCategory
 import `in`.juspay.airborne.constants.OTAConstants
+import `in`.juspay.airborne.ota.RollbackStore
 import org.json.JSONObject
 
 class OTAServices(private val ctx: Context, val workspace: Workspace, val cleanUpValue: String, val useBundledAssets: Boolean, val trackerCallback: TrackerCallback, val fromAirborne: Boolean = true) {
@@ -82,6 +83,7 @@ class OTAServices(private val ctx: Context, val workspace: Workspace, val cleanU
             // next boot skips the retry and loads stale state.
             workspace.writeToSharedPreference(OTAConstants.OTA_BUILD_ID, cleanUpValue)
             workspace.removeFromSharedPreference("asset_metadata.json")
+            RollbackStore.clearPersistedState(workspace)
             Log.i(TAG, "firstTimeCleanup: completed; persisted buildId='$cleanUpValue'")
             trackerCallback.track(
                 LogCategory.LIFECYCLE,
