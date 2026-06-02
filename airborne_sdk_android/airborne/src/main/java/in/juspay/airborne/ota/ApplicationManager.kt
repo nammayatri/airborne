@@ -68,6 +68,7 @@ class ApplicationManager(
     private val indexPathWaitTask = WaitTask()
     private val workspace = otaServices.workspace
     private val tracker = otaServices.trackerCallback
+    private val rollbackStore = RollbackStore(workspace, tracker)
     private var indexFolderPath = ""
     private var sessionId: String? = null
     private var rcCallback: ReleaseConfigCallback? = null
@@ -126,14 +127,19 @@ class ApplicationManager(
             trackInfo("init", JSONObject().put("client_id", clientId))
             val startTime = System.currentTimeMillis()
             try {
+                val (initialized, contextRef) = ensureContext(clientId)
                 if (releaseConfig == null) {
-                    val (initialized, contextRef) = ensureContext(clientId)
                     releaseConfig = readReleaseConfig(contextRef)
                     if (shouldUpdate) {
                         releaseConfig =
                             tryUpdate(clientId, initialized, contextRef, lazyDownloadCallback)
                     } else {
                         Log.d(TAG, "Updates disabled, running w/o updating.")
+                    }
+                }
+                releaseConfig?.let { resolved ->
+                    if (rollbackStore.evaluateBoot(resolved.pkg.version) == BootDecision.ROLLED_BACK) {
+                        releaseConfig = readReleaseConfig(contextRef)
                     }
                 }
                 val rc = releaseConfig
@@ -232,6 +238,7 @@ class ApplicationManager(
                 fileLock,
                 tracker,
                 netUtils,
+                rollbackStore,
                 rcHeaders,
                 lazyDownloadCallback,
                 fromAirborne,
@@ -524,7 +531,13 @@ class ApplicationManager(
     fun hasPendingBundleUpdate(): Boolean {
         val onDisk = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
             .takeIf { it.isNotEmpty() } ?: return false
+        if (rollbackStore.isFailed(onDisk)) return false
         return loadedPackageVersion != onDisk
+    }
+
+    fun markBundleSafe() {
+        val version = loadedPackageVersion ?: return
+        rollbackStore.markSafe(version)
     }
 
     private sealed class RCFetchResult {
@@ -559,7 +572,8 @@ class ApplicationManager(
                         .optJSONObject("properties")
                         ?.optBoolean("mandatory", false) ?: false
 
-                    val available = baseline.isEmpty() || baseline != serverVersion
+                    val available = (baseline.isEmpty() || baseline != serverVersion) &&
+                        !rollbackStore.isFailed(serverVersion)
 
                     return JSONObject()
                         .put("available", available)
@@ -664,6 +678,11 @@ class ApplicationManager(
             // Installing on top of residual files from a failed wipe would
             // fuse splits across two app versions.
             Log.w(TAG, "downloadUpdate: skipped — canTrustDisk=false; deferring until next clean boot")
+            onComplete(false)
+            return
+        }
+        if (rollbackStore.isTrialUnconfirmed(loadedPackageVersion)) {
+            Log.d(TAG, "downloadUpdate: unconfirmed trial in progress; skipping re-download")
             onComplete(false)
             return
         }

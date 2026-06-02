@@ -127,6 +127,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
     public var fileUtil: AJPFileUtil!
     public var remoteFileUtil: AJPRemoteFileUtil!
     private var utils: AJPApplicationManagerUtils!
+    private var rollbackStore: AJPRollbackStore!
     
     // Active manifest parts
     private var _currentLazy: [AJPLazyResource] = []
@@ -321,6 +322,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         let wipedCleanly = wipeOTAStorage()
 
         if wipedCleanly {
+            AJPRollbackStore.clearPersistedState(workspace: self.workspace)
             UserDefaults.standard.set(currentBuild, forKey: prefsKey)
             NSLog("[Airborne] firstTimeCleanup: completed; persisted marker='\(currentBuild)'")
         } else {
@@ -447,6 +449,7 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         }
         
         self.utils = AJPApplicationManagerUtils(fileUtil: self.fileUtil, tracker: self.tracker, remoteFileUtil: self.remoteFileUtil)
+        self.rollbackStore = AJPRollbackStore(workspace: self.workspace, fileUtil: self.fileUtil, tracker: self.tracker)
 
         // Skipping these when canTrustDisk=false leaves package/config/
         // resources nil so the bundled fallback below loads them from the
@@ -499,7 +502,25 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
             logVal["release_config"] = "Read bundled release_config.json"
             self.tracker.trackInfo("bundled_release_config", value: logVal)
         }
-        
+
+        if self.canTrustDisk {
+            let activeVersion = self.package?.version ?? ""
+            if !activeVersion.isEmpty, case .rolledBack = rollbackStore.evaluateBoot(activeVersion) {
+                if let restored = self.readApplicationPackage() {
+                    self.package = restored
+                } else if let data = try? self.fileUtil.getFileDataFromBundle("release_config.json"),
+                          let manifest = try? AJPApplicationManifest(data: data as NSData) {
+                    self.package = manifest.package
+                }
+                if let restoredConfig = self.readApplicationConfig() {
+                    self.config = restoredConfig
+                }
+                if let restoredResources = self.readApplicationResources() {
+                    self.resources = restoredResources
+                }
+            }
+        }
+
         self.initializeLazyResourcesDownloadStatus()
         
         collectionsLock.withLock {
@@ -549,6 +570,17 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 return
             }
             
+            if rollbackStore?.isFailed(tempPackage.version) == true {
+                let qMap = NSMutableDictionary()
+                qMap["version"] = tempPackage.version
+                tracker.trackError("temp_package_quarantined", value: qMap)
+                try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+                utils.cleanupTempDirectory()
+                return
+            }
+            rollbackStore?.snapshotActiveAsPrev()
+            rollbackStore?.beginTrial(tempPackage.version)
+
             // Move all files from temp to main
             let tempFiles = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_PACKAGE_DIR, subFolder: AJPApplicationConstants.JUSPAY_TEMP_DIR, includeSubfolders: true)
             var allMoveSuccessful = true
@@ -662,13 +694,23 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 withContentOfFileName: AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
                 inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)) as? AJPApplicationPackage,
                !pkg.version.isEmpty {
-                return true
+                if rollbackStore?.isFailed(pkg.version) != true {
+                    return true
+                }
+                let qMap = NSMutableDictionary()
+                qMap["reason"] = "quarantined_app_pkg_temp"
+                qMap["version"] = pkg.version
+                tracker.trackError("pending_bundle_purged", value: qMap)
+                try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
+                                          inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+                purgeStagedTempResources()
+            } else {
+                let infoMap = NSMutableDictionary()
+                infoMap["reason"] = "corrupted_app_pkg_temp"
+                tracker.trackError("pending_bundle_purged", value: infoMap)
+                try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
+                                          inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
             }
-            let infoMap = NSMutableDictionary()
-            infoMap["reason"] = "corrupted_app_pkg_temp"
-            tracker.trackError("pending_bundle_purged", value: infoMap)
-            try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
-                                      inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
         }
 
         // Resources-only update path: package unchanged but resources changed.
@@ -690,6 +732,15 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         return false
     }
 
+    private func purgeStagedTempResources() {
+        try? fileUtil.deleteFile(AJPApplicationConstants.APP_TEMP_RESOURCES_DATA_FILE_NAME,
+                                  inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        let staged = utils.getAllFilesInDirectory(AJPApplicationConstants.JUSPAY_RESOURCE_DIR, subFolder: "", includeSubfolders: true)
+        for fileName in staged {
+            utils.deleteFile(fileName, subFolder: "", inFolder: AJPApplicationConstants.JUSPAY_RESOURCE_DIR)
+        }
+    }
+
     @objc public func applyPendingBundleUpdate(completion: @escaping (Bool) -> Void) {
         guard hasPendingBundleUpdate() else {
             completion(false)
@@ -709,6 +760,11 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
         infoMap["package_version"] = self.package?.version ?? ""
         tracker.trackInfo("on_demand_temp_swap_applied", value: infoMap)
         completion(!hasPendingBundleUpdate())
+    }
+
+    @objc public func markBundleSafe() {
+        guard let pkg = self.package, !pkg.version.isEmpty, self.canTrustDisk else { return }
+        rollbackStore?.markSafe(pkg.version)
     }
 
     private func initializeLazyResourcesDownloadStatus() {
@@ -1497,8 +1553,14 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 map["time_taken"] = NSNumber(value: (Date().timeIntervalSince1970 * 1000) - startTime)
                 self.tracker.trackInfo("important_package_download_result", value: map)
                 
-                utils.moveAllPackagesFromTempToMain()
-                self.updatePackage(newManifest, didDownloadImportant: true, startTime: startTime)
+                if rollbackStore?.isFailed(newManifest.version) == true {
+                    utils.cleanupTempDirectory()
+                } else {
+                    rollbackStore?.snapshotActiveAsPrev()
+                    rollbackStore?.beginTrial(newManifest.version)
+                    utils.moveAllPackagesFromTempToMain()
+                    self.updatePackage(newManifest, didDownloadImportant: true, startTime: startTime)
+                }
                 
                 let map2 = NSMutableDictionary()
                 map2["result"] = "SUCCESS"

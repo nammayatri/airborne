@@ -14,6 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSString *)getReleaseConfig;
 - (void)checkForUpdateWithCompletion:(void (^)(NSString *status))completion;
 - (void)downloadUpdateWithCompletion:(void (^)(BOOL success))completion;
+- (void)markBundleSafe;
 - (BOOL)hasPendingBundleUpdate;
 - (void)applyPendingBundleUpdateWithCompletion:(void (^)(BOOL success))completion;
 

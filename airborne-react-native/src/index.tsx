@@ -58,6 +58,10 @@ export function downloadUpdate(nameSpace: string): Promise<boolean> {
   return Airborne.downloadUpdate(nameSpace);
 }
 
+export function markBundleSafe(nameSpace: string): Promise<void> {
+  return Airborne.markBundleSafe(nameSpace);
+}
+
 export function startBackgroundDownload(nameSpace: string): Promise<boolean> {
   return Airborne.startBackgroundDownload(nameSpace);
 }

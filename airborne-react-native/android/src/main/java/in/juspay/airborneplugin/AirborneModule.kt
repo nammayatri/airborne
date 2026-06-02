@@ -42,6 +42,11 @@ class AirborneModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun markBundleSafe(namespace: String, promise: Promise) {
+    implementation.markBundleSafe(namespace, promise)
+  }
+
+  @ReactMethod
   fun startBackgroundDownload(namespace: String, promise: Promise) {
     implementation.startBackgroundDownload(namespace, promise)
   }

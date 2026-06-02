@@ -492,6 +492,10 @@ extension AirborneServices {
         }
         manager.applyPendingBundleUpdate(completion: completion)
     }
+
+    @objc public func markBundleSafe() {
+        self.applicationManager?.markBundleSafe()
+    }
 }
 
 // MARK: - AJPLoggerDelegate Conformance

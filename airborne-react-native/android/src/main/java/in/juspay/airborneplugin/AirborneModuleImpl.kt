@@ -70,6 +70,22 @@ class AirborneModuleImpl(private val reactContext: ReactApplicationContext) {
         }
     }
 
+    fun markBundleSafe(namespace: String, promise: Promise) {
+        OTAUtils.runOnBackgroundThread {
+            try {
+                val airborne = Airborne.airborneObjectMap[namespace]
+                if (airborne == null) {
+                    promise.reject("AIRBORNE_ERROR", "Airborne not initialized for namespace: $namespace")
+                    return@runOnBackgroundThread
+                }
+                airborne.markBundleSafe()
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("AIRBORNE_ERROR", "Failed to mark bundle safe: ${e.message}", e)
+            }
+        }
+    }
+
     fun startBackgroundDownload(namespace: String, promise: Promise) {
         try {
             Airborne.triggerBackgroundDownload(reactContext.applicationContext, namespace)
