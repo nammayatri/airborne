@@ -1,0 +1,460 @@
+# Changelog
+All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
+
+- - -
+## airborne_react_native-v0.3.5 - 2026-04-16
+#### Bug Fixes
+- update android sdk version - (1229a00) - Yash Rajput
+
+- - -
+
+## v0.31.1 - 2026-04-16
+#### Miscellaneous Chores
+- **(version)** v0.31.1 [skip ci] - (fd3e886) - Airborne Bot
+
+- - -
+
+## v0.31.0 - 2026-04-16
+#### Miscellaneous Chores
+- **(version)** v0.31.0 [skip ci] - (9f47c56) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.3.4 - 2026-04-06
+#### Bug Fixes
+- use temp manifest strategy for release config timeout - (0883767) - Yash Rajput
+
+- - -
+
+## v0.30.0 - 2026-04-06
+#### Miscellaneous Chores
+- **(version)** v0.30.0 [skip ci] - (e345581) - Airborne Bot
+
+- - -
+
+## v0.29.2 - 2026-04-06
+#### Miscellaneous Chores
+- **(version)** v0.29.2 [skip ci] - (8cd1d49) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.3.3 - 2026-03-27
+#### Bug Fixes
+- update ios sdk version - (9805945) - Yash Rajput
+
+- - -
+
+## v0.29.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.29.0 [skip ci] - (4d13783) - Airborne Bot
+
+- - -
+
+## v0.28.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.28.0 [skip ci] - (b0b89d5) - Airborne Bot
+
+- - -
+
+## v0.27.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.27.0 [skip ci] - (75587e4) - Airborne Bot
+
+- - -
+
+## v0.26.1 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.26.1 [skip ci] - (7b0b420) - Airborne Bot
+
+- - -
+
+## v0.26.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.26.0 [skip ci] - (e987bfa) - Airborne Bot
+
+- - -
+
+## v0.25.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.25.0 [skip ci] - (8a22156) - Airborne Bot
+
+- - -
+
+## v0.24.4 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.24.4 [skip ci] - (3398e93) - Airborne Bot
+
+- - -
+
+## v0.24.3 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.24.3 [skip ci] - (bd6d431) - Airborne Bot
+
+- - -
+
+## v0.24.2 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.24.2 [skip ci] - (3c27527) - Airborne Bot
+
+- - -
+
+## v0.24.1 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.24.1 [skip ci] - (c89ac50) - Airborne Bot
+
+- - -
+
+## v0.24.0 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.24.0 [skip ci] - (d127ca2) - Airborne Bot
+
+- - -
+
+## v0.23.3 - 2026-03-27
+#### Miscellaneous Chores
+- **(version)** v0.23.3 [skip ci] - (fea39f7) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.3.2 - 2026-02-19
+#### Bug Fixes
+- app not responding when returning from background - (62ad9bf) - Yash Rajput
+
+- - -
+
+## airborne_react_native-v0.3.1 - 2026-02-10
+#### Bug Fixes
+- update airborne sdk dependency version - (0ca6b30) - Yash Rajput
+
+- - -
+
+## v0.23.0 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.23.0 [skip ci] - (0d2fcd5) - Airborne Bot
+
+- - -
+
+## v0.22.2 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.22.2 [skip ci] - (8a99832) - Airborne Bot
+
+- - -
+
+## v0.22.1 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.22.1 [skip ci] - (ad0c79b) - Airborne Bot
+
+- - -
+
+## v0.22.0 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.22.0 [skip ci] - (2caa013) - Airborne Bot
+
+- - -
+
+## v0.21.0 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.21.0 [skip ci] - (62d2ed4) - Airborne Bot
+
+- - -
+
+## v0.20.1 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.20.1 [skip ci] - (4c34176) - Airborne Bot
+
+- - -
+
+## v0.20.0 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.20.0 [skip ci] - (ea2c83e) - Airborne Bot
+
+- - -
+
+## v0.19.1 - 2026-02-10
+#### Miscellaneous Chores
+- **(version)** v0.19.1 [skip ci] - (39ef9bf) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.3.0 - 2026-01-06
+#### Features
+- Added SSLSocketFactory customization - (3120f69) - Yaswanth
+
+- - -
+
+## v0.18.3 - 2026-01-06
+#### Miscellaneous Chores
+- **(version)** v0.18.3 [skip ci] - (9114fb9) - Airborne Bot
+
+- - -
+
+## v0.18.2 - 2026-01-06
+#### Miscellaneous Chores
+- **(version)** v0.18.2 [skip ci] - (687f289) - Airborne Bot
+
+- - -
+
+## v0.18.1 - 2026-01-06
+#### Miscellaneous Chores
+- **(version)** v0.18.1 [skip ci] - (8327914) - Airborne Bot
+
+- - -
+
+## v0.18.0 - 2026-01-06
+#### Miscellaneous Chores
+- **(version)** v0.18.0 [skip ci] - (46c02c7) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.2.3 - 2026-01-05
+#### Bug Fixes
+- added .git to repository url - (4a35c5a) - Yaswanth
+
+- - -
+
+## airborne_react_native-v0.2.2 - 2026-01-05
+#### Bug Fixes
+- removed .git from repository url - (9785bd8) - Yaswanth
+
+- - -
+
+## v0.17.2 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.17.2 [skip ci] - (0df6583) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.2.1 - 2026-01-05
+#### Bug Fixes
+- fixed build gradle format - (f0582ca) - Yaswanth
+
+- - -
+
+## airborne_react_native-v0.2.0 - 2026-01-05
+#### Features
+- plugin to work with react native version 0.81+ - (ee7e54c) - Yaswanth
+
+- - -
+
+## v0.16.0 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.16.0 [skip ci] - (bdef647) - Airborne Bot
+
+- - -
+
+## v0.15.9 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.15.9 [skip ci] - (9d3ad53) - Airborne Bot
+
+- - -
+
+## v0.15.8 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.15.8 [skip ci] - (dffa42b) - Airborne Bot
+
+- - -
+
+## v0.15.7 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.15.7 [skip ci] - (b10086c) - Airborne Bot
+
+- - -
+
+## v0.15.6 - 2026-01-05
+#### Miscellaneous Chores
+- **(version)** v0.15.6 [skip ci] - (43686ce) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.1.3 - 2025-12-07
+#### Bug Fixes
+- Remove critical vulnerability via npm audit fix - (8c8f631) - George James
+
+- - -
+
+## v0.15.4 - 2025-12-07
+#### Miscellaneous Chores
+- **(version)** v0.15.4 [skip ci] - (4269cd6) - Airborne Bot
+
+- - -
+
+## v0.15.3 - 2025-12-07
+#### Miscellaneous Chores
+- **(version)** v0.15.3 [skip ci] - (bb591e8) - Airborne Bot
+
+- - -
+
+## v0.15.2 - 2025-12-07
+#### Miscellaneous Chores
+- **(version)** v0.15.2 [skip ci] - (0479382) - Airborne Bot
+
+- - -
+
+## v0.15.1 - 2025-12-07
+#### Miscellaneous Chores
+- **(version)** v0.15.1 [skip ci] - (a49504e) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.1.2 - 2025-11-18
+#### Bug Fixes
+- Node dependencies - (401031c) - ayush.jain@juspay.in
+#### Build system
+- **(deps)** bump rexml in /airborne-react-native/ExampleSplitBundle - (748e886) - dependabot[bot]
+- **(deps)** bump @react-native-community/cli and react-native - (23795b2) - dependabot[bot]
+- **(deps-dev)** bump @react-native-community/cli - (fb77fec) - dependabot[bot]
+- **(deps-dev)** bump @react-native-community/cli - (0b4253f) - dependabot[bot]
+
+- - -
+
+## v0.14.1 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.14.1 [skip ci] - (bdcba5f) - Airborne Bot
+
+- - -
+
+## v0.14.0 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.14.0 [skip ci] - (f336a22) - Airborne Bot
+
+- - -
+
+## v0.13.6 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.6 [skip ci] - (0038bbd) - Airborne Bot
+
+- - -
+
+## v0.13.5 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.5 [skip ci] - (3f20b3d) - Airborne Bot
+
+- - -
+
+## v0.13.4 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.4 [skip ci] - (a0cb64d) - Airborne Bot
+
+- - -
+
+## v0.13.3 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.3 [skip ci] - (8877854) - Airborne Bot
+
+- - -
+
+## v0.13.2 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.2 [skip ci] - (934d450) - Airborne Bot
+
+- - -
+
+## v0.13.1 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.1 [skip ci] - (5cd3d70) - Airborne Bot
+
+- - -
+
+## v0.13.0 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.13.0 [skip ci] - (bdbd374) - Airborne Bot
+
+- - -
+
+## v0.12.0 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.12.0 [skip ci] - (c3041a8) - Airborne Bot
+
+- - -
+
+## v0.11.1 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.11.1 [skip ci] - (210c3f8) - Airborne Bot
+
+- - -
+
+## v0.11.0 - 2025-11-18
+#### Miscellaneous Chores
+- **(version)** v0.11.0 [skip ci] - (984bb54) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.1.1 - 2025-10-17
+#### Bug Fixes
+- fix release pipeline - (9e0d102) - george.james
+
+- - -
+
+## airborne_react_native-v0.1.0 - 2025-10-16
+#### Features
+- added airborne cli - (545c8a7) - yash.rajput.001
+
+- - -
+
+## v0.9.1 - 2025-10-16
+#### Miscellaneous Chores
+- **(version)** v0.9.1 [skip ci] - (8635d5e) - Airborne Bot
+
+- - -
+
+## v0.9.0 - 2025-10-16
+#### Miscellaneous Chores
+- **(version)** v0.9.0 [skip ci] - (5c9c2d5) - Airborne Bot
+
+- - -
+
+## v0.8.0 - 2025-10-16
+#### Miscellaneous Chores
+- **(version)** v0.8.0 [skip ci] - (1802df0) - Airborne Bot
+
+- - -
+
+## v0.7.4 - 2025-10-16
+#### Miscellaneous Chores
+- **(version)** v0.7.4 [skip ci] - (15ee23e) - Airborne Bot
+
+- - -
+
+## v0.7.3 - 2025-10-16
+#### Miscellaneous Chores
+- **(version)** v0.7.3 [skip ci] - (6c03f7d) - Airborne Bot
+
+- - -
+
+## airborne_react_native-v0.0.2 - 2025-10-06
+#### Bug Fixes
+- Renamed class name for old arch - (5b57e2c) - Balaganesh S
+
+- - -
+
+## airborne_react_native-v0.0.1 - 2025-10-04
+#### Bug Fixes
+- node module dependancies corrected for npmjs - (0bb90db) - george.james
+
+- - -
+
+## airborne_react_plugin-v0.1.1 - 2025-10-01
+#### Bug Fixes
+- Missing headers in Airborne.h and react plugin update - (841e594) - Balaganesh S
+#### Documentation
+- iOS integration steps - (3656b18) - Balaganesh S
+
+- - -
+
+## v0.3.0 - 2025-10-01
+#### Bug Fixes
+- update bundles in background using airborne - (71ea78c) - Yaswanth
+#### Miscellaneous Chores
+- updated react plugin version to 0.3.0 - (c6f5426) - george.james
+
+- - -
+
+## airborne_react_plugin-v0.1.0 - 2025-09-24
+#### Features
+- introduce unified versioning - (b1d910e) - ayush.jain@juspay.in
+#### Refactoring
+- Rename react-plugin to airborne-react-plugin - (09d023d) - ayush.jain@juspay.in
+
+- - -
+
+Changelog generated by [cocogitto](https://github.com/cocogitto/cocogitto).
