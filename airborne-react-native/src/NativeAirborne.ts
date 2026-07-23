@@ -22,7 +22,7 @@ export interface Spec extends TurboModule {
   checkForUpdate(nameSpace: string): Promise<string>;
   downloadUpdate(nameSpace: string): Promise<boolean>;
   markBundleSafe(nameSpace: string): Promise<void>;
-  startBackgroundDownload(nameSpace: string): Promise<boolean>;
+  startBackgroundDownload(nameSpace: string, jobId: string): Promise<boolean>;
   hasPendingBundleUpdate(nameSpace: string): Promise<boolean>;
   applyPendingBundleUpdate(nameSpace: string): Promise<boolean>;
 }

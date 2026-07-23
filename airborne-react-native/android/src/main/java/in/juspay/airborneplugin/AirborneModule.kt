@@ -47,8 +47,8 @@ class AirborneModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun startBackgroundDownload(namespace: String, promise: Promise) {
-    implementation.startBackgroundDownload(namespace, promise)
+  fun startBackgroundDownload(namespace: String, jobId: String?, promise: Promise) {
+    implementation.startBackgroundDownload(namespace, jobId, promise)
   }
 
   @ReactMethod

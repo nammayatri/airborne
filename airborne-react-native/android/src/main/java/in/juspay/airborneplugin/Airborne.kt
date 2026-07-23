@@ -10,6 +10,7 @@ import `in`.juspay.airborne.TrackerCallback
 import `in`.juspay.airborne.utils.OTAUtils
 import `in`.juspay.hyperutil.constants.LogLevel
 import org.json.JSONObject
+import `in`.juspay.airborne.analytics.OtaFunnel
 import `in`.juspay.airborne.ota.OTADownloadWorker
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
@@ -69,6 +70,14 @@ class Airborne(
         }
         applicationManager.shouldUpdate = airborneInterface.enableBootDownload()
         persistWorkerConfig(context, namespace, releaseConfigUrl, airborneInterface.getDimensions())
+        val chimeConfig = airborneInterface.getChimeConfig()
+        OtaFunnel.persistConfig(
+            context,
+            namespace,
+            chimeConfig["url"],
+            chimeConfig["key"],
+            releaseConfigUrl
+        )
         applicationManager.loadApplication(namespace, airborneInterface.getLazyDownloadCallback())
     }
 
@@ -253,6 +262,15 @@ class Airborne(
          */
         @JvmStatic
         fun triggerBackgroundDownload(context: Context, namespace: String) {
+            triggerBackgroundDownload(context, namespace, "")
+        }
+
+        @JvmStatic
+        fun triggerBackgroundDownload(context: Context, namespace: String, jobId: String) {
+            OtaFunnel.persistJobId(context, namespace, jobId)
+            if (jobId.isNotEmpty()) {
+                OtaFunnel.post(context, namespace, "fcm_received", async = true)
+            }
             OTADownloadWorker.enqueue(context, namespace)
         }
 

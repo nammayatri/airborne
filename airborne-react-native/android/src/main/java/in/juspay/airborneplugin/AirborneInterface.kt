@@ -24,4 +24,6 @@ abstract class AirborneInterface {
     }
 
     open fun enableBootDownload(): Boolean = true
+
+    open fun getChimeConfig(): Map<String, String> = emptyMap()
 }

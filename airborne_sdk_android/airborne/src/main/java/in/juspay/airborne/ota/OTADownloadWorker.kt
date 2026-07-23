@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import `in`.juspay.airborne.HyperOTAServices
 import `in`.juspay.airborne.TrackerCallback
+import `in`.juspay.airborne.analytics.OtaFunnel
 import `in`.juspay.airborne.utils.OTAUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,9 +55,14 @@ class OTADownloadWorker(
 
         Log.d(TAG, "Starting background OTA download for namespace: $namespace (attempt ${runAttemptCount + 1}/$MAX_ATTEMPTS)")
 
+        if (runAttemptCount == 0) {
+            OtaFunnel.post(applicationContext, namespace, "worker_started", async = false)
+        }
+
         val config = readWorkerConfig(applicationContext, namespace)
         if (config == null) {
             Log.w(TAG, "No persisted worker config for '$namespace'. Airborne has never been initialized on this device. Giving up.")
+            OtaFunnel.post(applicationContext, namespace, "failed", errorCode = "no_persisted_config", async = false, terminal = true)
             return@withContext Result.failure()
         }
 
@@ -64,16 +70,27 @@ class OTADownloadWorker(
 
         val markerBefore = manager.readInstallMarkerVersion()
 
+        var failureCode = "download_failed"
         val result = try {
             downloadWithManager(manager)
         } catch (e: Exception) {
             Log.e(TAG, "Background download threw for '$namespace'", e)
+            failureCode = "exception:${e.javaClass.simpleName}"
             retryOrGiveUp("uncaught exception")
         }
 
         val markerAfter = manager.readInstallMarkerVersion()
         val didInstall = markerAfter.isNotEmpty() && markerAfter != markerBefore
         Log.d(TAG, "doWork finished: result=${result.javaClass.simpleName} markerBefore='$markerBefore' markerAfter='$markerAfter' didInstall=$didInstall")
+
+        when {
+            result == Result.success() && didInstall ->
+                OtaFunnel.post(applicationContext, namespace, "downloaded", version = markerAfter, async = false, terminal = true)
+            result == Result.success() ->
+                OtaFunnel.post(applicationContext, namespace, "no_update", async = false, terminal = true)
+            result == Result.failure() ->
+                OtaFunnel.post(applicationContext, namespace, "failed", errorCode = failureCode, async = false, terminal = true)
+        }
 
         if (result == Result.success() && didInstall) {
             scheduleSilentKillIfBackground(applicationContext)

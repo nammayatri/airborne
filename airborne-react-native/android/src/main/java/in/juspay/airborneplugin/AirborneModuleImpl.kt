@@ -86,9 +86,9 @@ class AirborneModuleImpl(private val reactContext: ReactApplicationContext) {
         }
     }
 
-    fun startBackgroundDownload(namespace: String, promise: Promise) {
+    fun startBackgroundDownload(namespace: String, jobId: String?, promise: Promise) {
         try {
-            Airborne.triggerBackgroundDownload(reactContext.applicationContext, namespace)
+            Airborne.triggerBackgroundDownload(reactContext.applicationContext, namespace, jobId ?: "")
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("AIRBORNE_ERROR", "Failed to start background download: ${e.message}", e)

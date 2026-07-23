@@ -38,8 +38,8 @@ class AirborneTurboModule(reactContext: ReactApplicationContext) :
     implementation.markBundleSafe(nameSpace, promise)
   }
 
-  override fun startBackgroundDownload(nameSpace: String, promise: Promise) {
-    implementation.startBackgroundDownload(nameSpace, promise)
+  override fun startBackgroundDownload(nameSpace: String, jobId: String, promise: Promise) {
+    implementation.startBackgroundDownload(nameSpace, jobId, promise)
   }
 
   override fun hasPendingBundleUpdate(nameSpace: String, promise: Promise) {

@@ -64,6 +64,8 @@ class ApplicationManager(
     private var loadedPackageVersion: String? = null
     @Volatile
     private var lastUpdateResult: UpdateResult? = null
+    @Volatile
+    private var bootStarted = false
     private val loadWaitTask = WaitTask()
     private val indexPathWaitTask = WaitTask()
     private val workspace = otaServices.workspace
@@ -121,6 +123,7 @@ class ApplicationManager(
         unSanitizedClientId: String,
         lazyDownloadCallback: LazyDownloadCallback? = null
     ) {
+        bootStarted = true
         doAsync {
             otaServices.clientId = unSanitizedClientId
             val clientId = sanitizeClientId(unSanitizedClientId)
@@ -529,6 +532,7 @@ class ApplicationManager(
      * effect — V8 has no API to swap the loaded JS in place.
      */
     fun hasPendingBundleUpdate(): Boolean {
+        if (!bootStarted) return false
         val onDisk = readFromInternalStorage(INSTALL_MARKER_FILE_NAME)
             .takeIf { it.isNotEmpty() } ?: return false
         if (rollbackStore.isFailed(onDisk)) return false
