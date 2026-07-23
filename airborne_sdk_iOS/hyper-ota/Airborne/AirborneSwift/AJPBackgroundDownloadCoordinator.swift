@@ -273,12 +273,14 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
 
     @objc(startDownloadFromPushWithCompletion:)
     public func startDownloadFromPush(completion fetchHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        AirborneChime.postFunnel(namespace: namespace, stage: "worker_started", version: nil)
         // Defer to next cold launch when an unconsumed temp marker is already on disk.
         let pkgTempPath = fileUtil.fullPathInStorageForFilePath(
             AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME,
             inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
         if FileManager.default.fileExists(atPath: pkgTempPath) {
             trackInfo("bg_download_skip_unconsumed_temp", value: [:])
+            reportOtaNoUpdate()
             fetchHandler(.noData)
             return
         }
@@ -286,6 +288,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
         let defaults = UserDefaults.standard
         guard let rcUrl = defaults.string(forKey: "airborne.bg.\(namespace).rcUrl"), !rcUrl.isEmpty else {
             trackError("bg_download_failed", value: ["reason": "no_persisted_config"])
+            reportOtaFailed("no_persisted_config")
             fetchHandler(.failed)
             return
         }
@@ -299,6 +302,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                     "reason": "rc_fetch_failed",
                     "error": error?.localizedDescription ?? "unknown"
                 ])
+                self.reportOtaFailed("rc_fetch_failed")
                 fetchHandler(.failed)
                 return
             }
@@ -309,6 +313,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
     private func continuePushFlow(with newManifest: AJPApplicationManifest, fetchHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         if rollbackStore.isFailed(newManifest.package.version) {
             trackInfo("bg_download_quarantined", value: ["target_package_version": newManifest.package.version])
+            reportOtaNoUpdate()
             fetchHandler(.noData)
             return
         }
@@ -320,6 +325,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
 
         if importants.isEmpty && resources.isEmpty {
             trackInfo("bg_download_no_diff", value: ["target_package_version": newManifest.package.version])
+            reportOtaNoUpdate()
             fetchHandler(.noData)
             return
         }
@@ -328,6 +334,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
             let existingTarget = (existing[BgPendingKey.targetPackageVersion] as? String) ?? ""
             if existingTarget == newManifest.package.version {
                 trackInfo("bg_download_duplicate_push", value: ["target_package_version": existingTarget])
+                reportOtaNoUpdate()
                 fetchHandler(.noData)
                 return
             }
@@ -357,6 +364,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 "reason": "manifest_save_failed",
                 "error": error.localizedDescription
             ])
+            reportOtaFailed("manifest_save_failed")
             fetchHandler(.failed)
             return
         }
@@ -381,6 +389,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
 
         if expected.isEmpty {
             trackInfo("bg_download_no_tasks_after_filter", value: [:])
+            reportOtaNoUpdate()
             fetchHandler(.noData)
             return
         }
@@ -394,6 +403,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 "reason": "manifest_archive_failed",
                 "error": error.localizedDescription
             ])
+            reportOtaFailed("manifest_archive_failed")
             fetchHandler(.failed)
             return
         }
@@ -410,6 +420,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
         ]
         if !writePendingState(state) {
             for task in tasks { task.cancel() }
+            reportOtaFailed("pending_state_write_failed")
             fetchHandler(.failed)
             return
         }
@@ -541,6 +552,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 "completed_count": completed.count,
                 "time_taken_ms": timeTakenMs
             ])
+            reportOtaFailed("task_failures")
             cleanupAfterFailure()
             return
         }
@@ -548,6 +560,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
         guard let archive = state[BgPendingKey.manifestArchive] as? Data,
               let manifest = try? NSKeyedUnarchiver.unarchivedObject(ofClass: AJPApplicationManifest.self, from: archive) else {
             trackError("bg_download_failed", value: ["reason": "manifest_unarchive_failed"])
+            reportOtaFailed("manifest_unarchive_failed")
             cleanupAfterFailure()
             return
         }
@@ -561,6 +574,7 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 "reason": "package_temp_write_failed",
                 "error": error.localizedDescription
             ])
+            reportOtaFailed("package_temp_write_failed")
             cleanupAfterFailure()
             return
         }
@@ -579,7 +593,20 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
             "time_taken_ms": timeTakenMs
         ])
 
+        AirborneChime.postFunnel(namespace: namespace,
+                                 stage: "downloaded",
+                                 version: manifest.package.version,
+                                 terminal: true)
+
         // No exit(0) — App Store §4.5.4 prohibits programmatic termination. Next cold launch promotes.
+    }
+
+    private func reportOtaFailed(_ reason: String) {
+        AirborneChime.postFunnel(namespace: namespace, stage: "failed", version: nil, errorCode: reason, terminal: true)
+    }
+
+    private func reportOtaNoUpdate() {
+        AirborneChime.postFunnel(namespace: namespace, stage: "no_update", version: nil, terminal: true)
     }
 
     private func cleanupAfterFailure() {

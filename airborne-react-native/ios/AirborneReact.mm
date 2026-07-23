@@ -105,6 +105,7 @@ static NSString * const defaultNamespace = @"default";
 }
 
 - (void)startBackgroundDownload:(NSString *)nameSpace
+                          jobId:(NSString *)jobId
                         resolve:(RCTPromiseResolveBlock)resolve
                          reject:(RCTPromiseRejectBlock)reject {
     reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);
@@ -219,6 +220,7 @@ RCT_EXPORT_METHOD(markBundleSafe:(NSString *)nameSpace
 }
 
 RCT_EXPORT_METHOD(startBackgroundDownload:(NSString *)nameSpace
+                  jobId:(NSString *)jobId
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {
     reject(@"AIRBORNE_NOT_IMPLEMENTED_IOS", @"startBackgroundDownload is not implemented on iOS", nil);

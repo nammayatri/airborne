@@ -64,6 +64,8 @@ import AirborneSwiftModel
     /// Return `false` to suppress the boot-time RC fetch + download cycle. Default `true`.
     @objc optional func enableBootDownload() -> Bool
 
+    @objc optional func chimeConfig() -> [String: String]
+
     /**
      * Called when the OTA boot process has completed successfully.
      *
@@ -225,6 +227,11 @@ import AirborneSwiftModel
         let dimsData = (try? JSONSerialization.data(withJSONObject: self.dimensions, options: [])) ?? Data()
         defaults.set(dimsData, forKey: "airborne.bg.\(ns).dimensions")
         defaults.set("in.juspay.airborne.bg.\(ns)", forKey: "airborne.bg.\(ns).bgSessionId")
+        let chimeConfig = delegate?.chimeConfig?() ?? [:]
+        AirborneChime.persistConfig(namespace: ns,
+                                    url: chimeConfig["url"],
+                                    secret: chimeConfig["key"],
+                                    releaseConfigUrl: self.releaseConfigURL)
     }
     
     public func getBaseBundle() -> Bundle {
@@ -421,6 +428,19 @@ extension AirborneServices {
         namespace: String,
         completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        startBackgroundDownload(namespace: namespace, jobId: "", completionHandler: completionHandler)
+    }
+
+    @objc(startBackgroundDownload:jobId:completionHandler:)
+    public static func startBackgroundDownload(
+        namespace: String,
+        jobId: String,
+        completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        AirborneChime.persistJobId(namespace: namespace, jobId: jobId)
+        if !jobId.isEmpty {
+            AirborneChime.postFunnel(namespace: namespace, stage: "fcm_received", version: nil)
+        }
         guard let coordinator = AJPBackgroundDownloadCoordinator.sharedInstance(forNamespace: namespace) else {
             completionHandler(.failed)
             return

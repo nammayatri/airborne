@@ -62,8 +62,11 @@ export function markBundleSafe(nameSpace: string): Promise<void> {
   return Airborne.markBundleSafe(nameSpace);
 }
 
-export function startBackgroundDownload(nameSpace: string): Promise<boolean> {
-  return Airborne.startBackgroundDownload(nameSpace);
+export function startBackgroundDownload(
+  nameSpace: string,
+  jobId: string = ''
+): Promise<boolean> {
+  return Airborne.startBackgroundDownload(nameSpace, jobId);
 }
 
 export function hasPendingBundleUpdate(nameSpace: string): Promise<boolean> {
