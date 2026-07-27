@@ -43,4 +43,10 @@ internal object Constants {
         lazy = emptyList()
     )
     val DEFAULT_RESOURCES = ReleaseConfig.ResourceManifest(emptyList())
+
+    fun isForeignPlatformIndex(fileName: String?): Boolean {
+        val name = (fileName ?: "").substringAfterLast('/').lowercase()
+        if (name.isEmpty()) return false
+        return name.endsWith(".jsbundle")
+    }
 }

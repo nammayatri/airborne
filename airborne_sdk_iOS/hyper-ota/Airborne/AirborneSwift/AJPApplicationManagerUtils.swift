@@ -32,6 +32,12 @@ class AJPApplicationManagerUtils {
         self.tracker = tracker
         self.remoteFileUtil = remoteFileUtil
     }
+
+    static func isForeignPlatformIndex(_ indexFilePath: String) -> Bool {
+        let name = (indexFilePath as NSString).lastPathComponent.lowercased()
+        guard !name.isEmpty else { return false }
+        return name.hasSuffix(".android.bundle") || name.contains(".android.")
+    }
     
     // MARK: - Temp Directory Handlers
     

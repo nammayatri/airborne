@@ -22,33 +22,39 @@ final class AJPRollbackStore {
 
     static let maxTrialBootAttempts = 2
     private static let maxFailedHistory = 20
+    private static let stateFileName = "app-rollback-state.dat"
+
+    private struct RollbackState: Codable {
+        var trialVersion: String = ""
+        var trialAttempts: Int = 0
+        var safeVersion: String = ""
+        var failedVersions: [String] = []
+    }
 
     private let workspace: String
     private let fileUtil: AJPFileUtil
     private let tracker: AJPApplicationTracker
-    private let defaults = UserDefaults.standard
 
     init(workspace: String, fileUtil: AJPFileUtil, tracker: AJPApplicationTracker) {
         self.workspace = workspace
         self.fileUtil = fileUtil
         self.tracker = tracker
+        migrateLegacyStateIfNeeded()
     }
 
-    func trialVersion() -> String { defaults.string(forKey: keyTrialVersion) ?? "" }
+    func trialVersion() -> String { loadState().trialVersion }
 
-    func safeVersion() -> String { defaults.string(forKey: keySafeVersion) ?? "" }
+    func safeVersion() -> String { loadState().safeVersion }
 
-    func failedVersions() -> Set<String> {
-        Set((defaults.array(forKey: keyFailed) as? [String]) ?? [])
-    }
+    func failedVersions() -> Set<String> { Set(loadState().failedVersions) }
 
     func isFailed(_ version: String) -> Bool {
         !version.isEmpty && failedVersions().contains(version)
     }
 
     func isTrialUnconfirmed(_ loadedVersion: String?) -> Bool {
-        let trial = trialVersion()
-        return !trial.isEmpty && trial == loadedVersion && trial != safeVersion()
+        let state = loadState()
+        return !state.trialVersion.isEmpty && state.trialVersion == loadedVersion && state.trialVersion != state.safeVersion
     }
 
     func snapshotActiveAsPrev() {
@@ -70,18 +76,23 @@ final class AJPRollbackStore {
     }
 
     func beginTrial(_ version: String) {
-        defaults.set(version, forKey: keyTrialVersion)
-        defaults.set(0, forKey: keyTrialAttempts)
+        var state = loadState()
+        state.trialVersion = version
+        state.trialAttempts = 0
+        saveState(state)
     }
 
     func evaluateBoot(_ activeVersion: String) -> AJPBootDecision {
-        let trial = trialVersion()
+        var state = loadState()
+        let trial = state.trialVersion
         if trial.isEmpty { return .normal }
-        if trial != activeVersion || trial == safeVersion() {
+        if trial != activeVersion || trial == state.safeVersion {
             clearTrial()
             return .normal
         }
-        let attempts = recordBootAttempt()
+        state.trialAttempts += 1
+        let attempts = state.trialAttempts
+        saveState(state)
         if attempts > AJPRollbackStore.maxTrialBootAttempts {
             let restored = restorePrevToActive()
             if !restored { discardActiveOta() }
@@ -102,9 +113,15 @@ final class AJPRollbackStore {
 
     func markSafe(_ version: String) {
         if version.isEmpty { return }
-        defaults.set(version, forKey: keySafeVersion)
-        if trialVersion() == version {
-            clearTrial()
+        var state = loadState()
+        state.safeVersion = version
+        let wasTrial = state.trialVersion == version
+        if wasTrial {
+            state.trialVersion = ""
+            state.trialAttempts = 0
+        }
+        saveState(state)
+        if wasTrial {
             clearPrev()
             NSLog("[Airborne] Marked bundle '\(version)' safe")
             track(info: "ota_bundle_marked_safe", ["version": version])
@@ -113,19 +130,13 @@ final class AJPRollbackStore {
 
     func markFailed(_ version: String) {
         if version.isEmpty { return }
-        var current = (defaults.array(forKey: keyFailed) as? [String]) ?? []
-        if current.contains(version) { return }
-        current.append(version)
-        if current.count > AJPRollbackStore.maxFailedHistory {
-            current = Array(current.suffix(AJPRollbackStore.maxFailedHistory))
+        var state = loadState()
+        if state.failedVersions.contains(version) { return }
+        state.failedVersions.append(version)
+        if state.failedVersions.count > AJPRollbackStore.maxFailedHistory {
+            state.failedVersions = Array(state.failedVersions.suffix(AJPRollbackStore.maxFailedHistory))
         }
-        defaults.set(current, forKey: keyFailed)
-    }
-
-    private func recordBootAttempt() -> Int {
-        let next = defaults.integer(forKey: keyTrialAttempts) + 1
-        defaults.set(next, forKey: keyTrialAttempts)
-        return next
+        saveState(state)
     }
 
     private func restorePrevToActive() -> Bool {
@@ -162,8 +173,45 @@ final class AJPRollbackStore {
     }
 
     private func clearTrial() {
-        defaults.set("", forKey: keyTrialVersion)
-        defaults.set(0, forKey: keyTrialAttempts)
+        var state = loadState()
+        state.trialVersion = ""
+        state.trialAttempts = 0
+        saveState(state)
+    }
+
+    private func loadState() -> RollbackState {
+        guard let data = try? fileUtil.getFileDataFromInternalStorage(AJPRollbackStore.stateFileName, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR),
+              let decoded = try? JSONDecoder().decode(RollbackState.self, from: data) else {
+            return RollbackState()
+        }
+        return decoded
+    }
+
+    private func saveState(_ state: RollbackState) {
+        do {
+            let data = try JSONEncoder().encode(state)
+            try fileUtil.saveFileWithData(data, fileName: AJPRollbackStore.stateFileName, folderName: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        } catch {
+            track(error: "ota_rollback_state_write_failed", ["error": error.localizedDescription])
+        }
+    }
+
+    private func migrateLegacyStateIfNeeded() {
+        let statePath = fileUtil.fullPathInStorageForFilePath(AJPRollbackStore.stateFileName, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        if FileManager.default.fileExists(atPath: statePath) { return }
+        let defaults = UserDefaults.standard
+        let trial = defaults.string(forKey: AJPRollbackStore.keyTrialVersion(workspace)) ?? ""
+        let safe = defaults.string(forKey: AJPRollbackStore.keySafeVersion(workspace)) ?? ""
+        let attempts = defaults.integer(forKey: AJPRollbackStore.keyTrialAttempts(workspace))
+        let failed = (defaults.array(forKey: AJPRollbackStore.keyFailed(workspace)) as? [String]) ?? []
+        if trial.isEmpty && safe.isEmpty && attempts == 0 && failed.isEmpty { return }
+        var state = RollbackState()
+        state.trialVersion = trial
+        state.trialAttempts = attempts
+        state.safeVersion = safe
+        state.failedVersions = failed
+        saveState(state)
+        AJPRollbackStore.removeLegacyDefaults(workspace)
     }
 
     private var mainDir: String {
@@ -206,22 +254,23 @@ final class AJPRollbackStore {
         ]
     }
 
-    private var keyTrialVersion: String { AJPRollbackStore.keyTrialVersion(workspace) }
-    private var keyTrialAttempts: String { AJPRollbackStore.keyTrialAttempts(workspace) }
-    private var keySafeVersion: String { AJPRollbackStore.keySafeVersion(workspace) }
-    private var keyFailed: String { AJPRollbackStore.keyFailed(workspace) }
-
     private static func keyTrialVersion(_ ws: String) -> String { "airborne.trial.\(ws).version" }
     private static func keyTrialAttempts(_ ws: String) -> String { "airborne.trial.\(ws).attempts" }
     private static func keySafeVersion(_ ws: String) -> String { "airborne.safe.\(ws).version" }
     private static func keyFailed(_ ws: String) -> String { "airborne.failed.\(ws)" }
 
-    static func clearPersistedState(workspace: String) {
+    private static func removeLegacyDefaults(_ ws: String) {
         let d = UserDefaults.standard
-        d.removeObject(forKey: keyTrialVersion(workspace))
-        d.removeObject(forKey: keyTrialAttempts(workspace))
-        d.removeObject(forKey: keySafeVersion(workspace))
-        d.removeObject(forKey: keyFailed(workspace))
+        d.removeObject(forKey: keyTrialVersion(ws))
+        d.removeObject(forKey: keyTrialAttempts(ws))
+        d.removeObject(forKey: keySafeVersion(ws))
+        d.removeObject(forKey: keyFailed(ws))
+    }
+
+    static func clearPersistedState(workspace: String) {
+        let fileUtil = AJPFileUtil(workspace: workspace, baseBundle: nil)
+        try? fileUtil.deleteFile(stateFileName, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+        removeLegacyDefaults(workspace)
     }
 
     private func track(info key: String, _ value: [String: Any]) {

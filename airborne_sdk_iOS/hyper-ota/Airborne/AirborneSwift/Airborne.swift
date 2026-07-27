@@ -323,6 +323,10 @@ extension AirborneServices {
             return bundlePath.url(forResource: "main", withExtension: "jsBundle") ?? bundlePath.bundleURL.appendingPathComponent("main.jsBundle")
         }
 
+        if AJPApplicationManagerUtils.isForeignPlatformIndex(indexFilePath) {
+            return bundlePath.url(forResource: "main", withExtension: "jsBundle") ?? bundlePath.bundleURL.appendingPathComponent("main.jsBundle")
+        }
+
         // A stale file matching the bundled index's name could survive a
         // partial upgrade wipe; bypassing the disk lookup serves the bundle.
         let canTrustDisk = self.applicationManager?.canTrustDisk ?? true

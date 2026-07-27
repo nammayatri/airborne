@@ -471,6 +471,12 @@ internal class UpdateTask(
             trackPackageUpdateResult(Result.Error.CustomError("version quarantined"), startTime)
             return false
         }
+        if (Constants.isForeignPlatformIndex(pkg.index?.filePath)) {
+            Log.w(TAG, "Skipping install of foreign-platform bundle ${pkg.version} (index=${pkg.index?.filePath}).")
+            rollbackStore.markFailed(pkg.version)
+            trackPackageUpdateResult(Result.Error.CustomError("wrong platform bundle"), startTime)
+            return false
+        }
         rollbackStore.snapshotActiveAsPrev()
         rollbackStore.beginTrial(pkg.version)
 

@@ -578,6 +578,16 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 utils.cleanupTempDirectory()
                 return
             }
+            if AJPApplicationManagerUtils.isForeignPlatformIndex(tempPackage.index.filePath) {
+                let qMap = NSMutableDictionary()
+                qMap["version"] = tempPackage.version
+                qMap["index"] = tempPackage.index.filePath
+                tracker.trackError("temp_package_wrong_platform", value: qMap)
+                rollbackStore?.markFailed(tempPackage.version)
+                try? fileUtil.deleteFile(AJPApplicationConstants.APP_PACKAGE_DATA_TEMP_FILE_NAME, inFolder: AJPApplicationConstants.JUSPAY_MANIFEST_DIR)
+                utils.cleanupTempDirectory()
+                return
+            }
             rollbackStore?.snapshotActiveAsPrev()
             rollbackStore?.beginTrial(tempPackage.version)
 
@@ -1554,6 +1564,13 @@ public typealias AJPReleaseConfigCompletionHandler = (AJPApplicationManifest?, E
                 self.tracker.trackInfo("important_package_download_result", value: map)
                 
                 if rollbackStore?.isFailed(newManifest.version) == true {
+                    utils.cleanupTempDirectory()
+                } else if AJPApplicationManagerUtils.isForeignPlatformIndex(newManifest.index.filePath) {
+                    let qMap = NSMutableDictionary()
+                    qMap["version"] = newManifest.version
+                    qMap["index"] = newManifest.index.filePath
+                    tracker.trackError("package_wrong_platform", value: qMap)
+                    rollbackStore?.markFailed(newManifest.version)
                     utils.cleanupTempDirectory()
                 } else {
                     rollbackStore?.snapshotActiveAsPrev()
