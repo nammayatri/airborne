@@ -69,6 +69,7 @@ class ApplicationManager(
     private val loadWaitTask = WaitTask()
     private val indexPathWaitTask = WaitTask()
     private val workspace = otaServices.workspace
+    private val taskKey: String = workspace.path
     private val tracker = otaServices.trackerCallback
     private val rollbackStore = RollbackStore(workspace, tracker)
     private var indexFolderPath = ""
@@ -102,20 +103,20 @@ class ApplicationManager(
     }
 
     /**
-     * Register or refresh this client's context in the shared CONTEXT_MAP.
+     * Register or refresh this workspace's context in the shared CONTEXT_MAP.
      * @return Pair of (initialized: whether another context already existed, contextRef: the lock object)
      */
-    private fun ensureContext(clientId: String): Pair<Boolean, Any> {
+    private fun ensureContext(): Pair<Boolean, Any> {
         val newRef = WeakReference(ctx)
-        val currentRef = CONTEXT_MAP[clientId]
+        val currentRef = CONTEXT_MAP[taskKey]
         val initialized = if (currentRef == null) {
-            CONTEXT_MAP.putIfAbsent(clientId, newRef) != null
+            CONTEXT_MAP.putIfAbsent(taskKey, newRef) != null
         } else if (currentRef.get() == null) {
-            !CONTEXT_MAP.replace(clientId, currentRef, newRef)
+            !CONTEXT_MAP.replace(taskKey, currentRef, newRef)
         } else {
             true
         }
-        val contextRef = CONTEXT_MAP[clientId] ?: newRef
+        val contextRef = CONTEXT_MAP[taskKey] ?: newRef
         return Pair(initialized, contextRef)
     }
 
@@ -130,7 +131,7 @@ class ApplicationManager(
             trackInfo("init", JSONObject().put("client_id", clientId))
             val startTime = System.currentTimeMillis()
             try {
-                val (initialized, contextRef) = ensureContext(clientId)
+                val (initialized, contextRef) = ensureContext()
                 if (releaseConfig == null) {
                     releaseConfig = readReleaseConfig(contextRef)
                     if (shouldUpdate) {
@@ -248,7 +249,7 @@ class ApplicationManager(
                 packageTimeoutOverride,
                 releaseConfigTimeoutOverride
             )
-        val runningTask = RUNNING_UPDATE_TASKS.putIfAbsent(clientId, newTask) ?: newTask
+        val runningTask = RUNNING_UPDATE_TASKS.putIfAbsent(taskKey, newTask) ?: newTask
         if (runningTask == newTask) {
             Log.d(TAG, "No running update tasks for '$clientId', starting new task.")
             val pkg = runningTask.copyTempPkg()
@@ -267,7 +268,7 @@ class ApplicationManager(
 
                     else -> false
                 }
-                RUNNING_UPDATE_TASKS.remove(clientId)
+                RUNNING_UPDATE_TASKS.remove(taskKey)
                 logTimeTaken(startTime, "Update task finished for '$clientId'.")
                 postMetrics(newTask.updateUUID, packageUpdated)
             }
@@ -699,7 +700,7 @@ class ApplicationManager(
         doAsync {
             try {
                 val clientId = sanitizeClientId(otaServices.clientId ?: "")
-                val (initialized, contextRef) = ensureContext(clientId)
+                val (initialized, contextRef) = ensureContext()
 
                 if (releaseConfig == null) {
                     releaseConfig = readReleaseConfig(contextRef)

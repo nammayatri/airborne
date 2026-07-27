@@ -422,9 +422,9 @@ internal class UpdateTask(
                 }
                 return null
             } catch (e: Exception) {
-                removeFromPersistentState(StateKey.SAVED_RESOURCE_UPDATE)
+                removeFromPersistentState(StateKey.SAVED_PACKAGE_UPDATE)
                 trackException(
-                    "saved_resources_corrupted",
+                    "saved_package_corrupted",
                     e
                 )
                 return null
@@ -468,12 +468,14 @@ internal class UpdateTask(
     ): Boolean {
         if (rollbackStore.isFailed(pkg.version)) {
             Log.w(TAG, "Skipping install of quarantined version ${pkg.version}.")
+            tw.delete()
             trackPackageUpdateResult(Result.Error.CustomError("version quarantined"), startTime)
             return false
         }
         if (Constants.isForeignPlatformIndex(pkg.index?.filePath)) {
             Log.w(TAG, "Skipping install of foreign-platform bundle ${pkg.version} (index=${pkg.index?.filePath}).")
             rollbackStore.markFailed(pkg.version)
+            tw.delete()
             trackPackageUpdateResult(Result.Error.CustomError("wrong platform bundle"), startTime)
             return false
         }
@@ -624,6 +626,15 @@ internal class UpdateTask(
         val local = localReleaseConfig?.pkg
         if (rollbackStore.isFailed(fetched.version)) {
             Log.d(TAG, "Fetched version ${fetched.version} is quarantined; skipping download.")
+            return Update.Package.NA
+        }
+        if (Constants.isForeignPlatformIndex(fetched.index?.filePath)) {
+            Log.w(
+                TAG,
+                "Fetched version ${fetched.version} targets another platform " +
+                    "(index=${fetched.index?.filePath}); skipping download."
+            )
+            rollbackStore.markFailed(fetched.version)
             return Update.Package.NA
         }
         if (local?.version == fetched.version) {

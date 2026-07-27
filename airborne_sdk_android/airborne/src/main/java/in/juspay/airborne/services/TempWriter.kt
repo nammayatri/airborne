@@ -48,6 +48,8 @@ class TempWriter internal constructor(s: String, m: FileProviderService.Mode, pr
     val dirName: String
         get() = tempDir.name
 
+    fun delete(): Boolean = tempDir.deleteRecursively()
+
     fun list(): Array<String>? {
         return fileProviderService.listFilesRecursive(tempDir)
     }

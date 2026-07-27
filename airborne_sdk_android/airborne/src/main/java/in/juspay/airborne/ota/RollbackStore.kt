@@ -224,7 +224,7 @@ internal class RollbackStore(
         workspace.getFromSharedPreference(key, default) ?: default
 
     private fun writeKv(key: String, value: String) {
-        workspace.writeToSharedPreference(key, value)
+        workspace.writeToSharedPreferenceSync(key, value)
     }
 
     private fun track(level: String, label: String, value: JSONObject) {

@@ -143,6 +143,12 @@ open class Workspace {
             .apply()
     }
 
+    fun writeToSharedPreferenceSync(key: String?, value: String?): Boolean = key?.let {
+        sharedPrefsList[0].edit()
+            .putString(it, value)
+            .commit()
+    } ?: false
+
     fun removeFromSharedPreference(key: String?): Unit? = key?.let {
         for (sharedPref in sharedPrefsList) {
             sharedPref.edit()?.remove(it)?.apply()
