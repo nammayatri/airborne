@@ -10,6 +10,7 @@ object OtaFunnel {
     private const val ORG_KEY = "chime_org"
     private const val APP_KEY = "chime_app"
     private const val JOB_ID_KEY = "chime_job_id"
+    private const val OS = "android"
 
     fun persistConfig(
         context: Context,
@@ -57,6 +58,7 @@ object OtaFunnel {
             .put("job_id", jobId)
             .put("stage", stage)
             .put("package", context.packageName)
+            .put("os", OS)
             .put("airborne_org", prefs.getString(ORG_KEY, null).orEmpty())
             .put("airborne_app", prefs.getString(APP_KEY, null).orEmpty())
         if (version != null) body.put("version", version)

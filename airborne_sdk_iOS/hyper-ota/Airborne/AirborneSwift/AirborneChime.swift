@@ -3,6 +3,8 @@ import UIKit
 
 @objc public class AirborneChime: NSObject {
 
+    private static let platform = "ios"
+
     @objc public static func persistConfig(namespace: String, url: String?, secret: String?, releaseConfigUrl: String?) {
         guard let url = url, !url.isEmpty, let secret = secret, !secret.isEmpty else { return }
         let release = parseReleaseConfigUrl(releaseConfigUrl)
@@ -46,6 +48,7 @@ import UIKit
             "job_id": jobId,
             "stage": stage,
             "package": Bundle.main.bundleIdentifier ?? "",
+            "os": platform,
             "airborne_org": defaults.string(forKey: key(namespace, "chimeOrg")) ?? "",
             "airborne_app": defaults.string(forKey: key(namespace, "chimeApp")) ?? ""
         ]
