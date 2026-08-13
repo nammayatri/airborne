@@ -317,6 +317,15 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
             fetchHandler(.noData)
             return
         }
+
+        let installedVersion = installedVersionOnDisk()
+        if !installedVersion.isEmpty, installedVersion == newManifest.package.version {
+            trackInfo("bg_download_same_version", value: ["target_package_version": newManifest.package.version])
+            reportOtaNoUpdate()
+            fetchHandler(.noData)
+            return
+        }
+
         let currentPackage = readCurrentPackage()
         let currentResources = readCurrentResources()
 
@@ -749,6 +758,14 @@ private let bgLog = OSLog(subsystem: "in.juspay.Airborne", category: "Background
                 DispatchQueue.main.async { completion(false) }
                 return
             }
+
+            let installedVersion = self.installedVersionOnDisk()
+            if !installedVersion.isEmpty, installedVersion == manifest.package.version {
+                self.trackInfo("foreground_download_same_version", value: ["target_package_version": manifest.package.version])
+                DispatchQueue.main.async { completion(true) }
+                return
+            }
+
             let currentPackage = self.readCurrentPackage()
             let currentResources = self.readCurrentResources()
             let importants = self.importantSplitsToDownload(newPackage: manifest.package, currentPackage: currentPackage)
