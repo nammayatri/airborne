@@ -9,6 +9,6 @@
 #import "AJPHelpers.h"
 #import "AJPApplicationTracker.h"
 #else
-#import <Airborne/AJPHelpers.h>
-#import <Airborne/AJPApplicationTracker.h>
+#import <AirborneNY/AJPHelpers.h>
+#import <AirborneNY/AJPApplicationTracker.h>
 #endif

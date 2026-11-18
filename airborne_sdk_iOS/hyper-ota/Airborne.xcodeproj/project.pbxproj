@@ -42,8 +42,8 @@
 		DC6376832F9F327200BE5CD4 /* AJPApplicationConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6376822F9F327200BE5CD4 /* AJPApplicationConstants.swift */; };
 		BC00F00D000000000000C001 /* AJPBackgroundDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC00F00D000000000000C000 /* AJPBackgroundDownloadCoordinator.swift */; };
 		BC00F00E000000000000C001 /* AirborneChime.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC00F00E000000000000C000 /* AirborneChime.swift */; };
-		DC6A9D762F8E3DFB00FE7DF0 /* Airborne.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* Airborne.framework */; };
-		DC6A9D772F8E3DFB00FE7DF0 /* Airborne.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* Airborne.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DC6A9D762F8E3DFB00FE7DF0 /* AirborneNY.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* AirborneNY.framework */; };
+		DC6A9D772F8E3DFB00FE7DF0 /* AirborneNY.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DCB613FB2E6191FB0099D87E /* AirborneNY.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		DC6A9D842F8E53F100FE7DF0 /* AJPHelpers.h in Headers */ = {isa = PBXBuildFile; fileRef = DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		DC6A9D862F8E540300FE7DF0 /* AJPHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = DC6A9D852F8E540300FE7DF0 /* AJPHelpers.m */; };
 		DCD493C32F98DD2E000534A0 /* AJPResource.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD493C22F98DD2E000534A0 /* AJPResource.swift */; };
@@ -76,7 +76,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				DC6A9D772F8E3DFB00FE7DF0 /* Airborne.framework in Embed Frameworks */,
+				DC6A9D772F8E3DFB00FE7DF0 /* AirborneNY.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -108,7 +108,7 @@
 		DC6A9D4F2F8E286900FE7DF0 /* AirborneTestAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AirborneTestAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC6A9D832F8E53F100FE7DF0 /* AJPHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AJPHelpers.h; sourceTree = "<group>"; };
 		DC6A9D852F8E540300FE7DF0 /* AJPHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AJPHelpers.m; sourceTree = "<group>"; };
-		DCB613FB2E6191FB0099D87E /* Airborne.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Airborne.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		DCB613FB2E6191FB0099D87E /* AirborneNY.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AirborneNY.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCD493C22F98DD2E000534A0 /* AJPResource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPResource.swift; sourceTree = "<group>"; };
 		DCD868DD2F9B523900E341CD /* AJPApplicationConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPApplicationConfig.swift; sourceTree = "<group>"; };
 		DCD868DE2F9B523900E341CD /* AJPApplicationPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AJPApplicationPackage.swift; sourceTree = "<group>"; };
@@ -146,7 +146,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DC6A9D762F8E3DFB00FE7DF0 /* Airborne.framework in Frameworks */,
+				DC6A9D762F8E3DFB00FE7DF0 /* AirborneNY.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -285,7 +285,7 @@
 		DCB613FC2E6191FB0099D87E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DCB613FB2E6191FB0099D87E /* Airborne.framework */,
+				DCB613FB2E6191FB0099D87E /* AirborneNY.framework */,
 				DC6A9D3A2F8E286700FE7DF0 /* AirborneTestApp.app */,
 				DC6A9D4F2F8E286900FE7DF0 /* AirborneTestAppTests.xctest */,
 			);
@@ -372,7 +372,7 @@
 			packageProductDependencies = (
 			);
 			productName = Airborne;
-			productReference = DCB613FB2E6191FB0099D87E /* Airborne.framework */;
+			productReference = DCB613FB2E6191FB0099D87E /* AirborneNY.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
@@ -462,7 +462,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/sh\nFRAMEWORK_NAME=\"Airborne\"\n\nFRAMEWORK=\"${UNIVERSAL_LIBRARY_DIR}/${FRAMEWORK_NAME}.framework\"\n\nOUTPUT_DIR=\"./${FRAMEWORK_NAME}-Framework\"\n\n# Clean and build the framework for the iOS simulator\nxcodebuild -project ${FRAMEWORK_NAME}.xcodeproj \\\n    -scheme ${FRAMEWORK_NAME} \\\n    -sdk iphonesimulator \\\n    -configuration ${CONFIGURATION} \\\n    -destination 'generic/platform=iOS Simulator' \\\n    clean build \\\n    CONFIGURATION_BUILD_DIR=${BUILD_DIR}/Release-iphonesimulator \\\n    -UseModernBuildSystem=YES > /dev/null\n\n# Clean and build the framework for iOS devices\nxcodebuild -project ${FRAMEWORK_NAME}.xcodeproj \\\n    -scheme ${FRAMEWORK_NAME} \\\n    -sdk iphoneos \\\n    -configuration ${CONFIGURATION} \\\n    -destination 'generic/platform=iOS' \\\n    build \\\n    CONFIGURATION_BUILD_DIR=${BUILD_DIR}/${CONFIGURATION}-iphoneos \\\n    -UseModernBuildSystem=YES > /dev/null\n\n# Remove any existing build directories\nrm -rf \"${BUILD_DIR}/iphone\"\nrm -rf \"${BUILD_DIR}/simulator\"\n\n# Create directories to hold device and simulator builds\nmkdir \"${BUILD_DIR}/iphone\"\nmkdir \"${BUILD_DIR}/simulator\"\n\nrm -rf ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework\ncp -r ${BUILD_DIR}/${CONFIGURATION}-iphoneos/${FRAMEWORK_NAME}.framework ${BUILD_DIR}/iphone/${FRAMEWORK_NAME}.framework\ncp -r ${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/${FRAMEWORK_NAME}.framework ${BUILD_DIR}/simulator/${FRAMEWORK_NAME}.framework\n\n# Create an XCFramework from the device and simulator builds\nxcrun xcodebuild -create-xcframework -framework ${BUILD_DIR}/iphone/${FRAMEWORK_NAME}.framework -framework ${BUILD_DIR}/simulator/${FRAMEWORK_NAME}.framework -output ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework\n\nrm -rf \"$OUTPUT_DIR/${FRAMEWORK_NAME}.xcframework\"\nmkdir -p \"$OUTPUT_DIR\"\n\n# Copy the XCFramework to the output directory\ncp -r ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework ${OUTPUT_DIR}\n\nopen \"${OUTPUT_DIR}\"\n\n";
+			shellScript = "#!/bin/sh\nPROJECT_NAME=\"Airborne\"\nFRAMEWORK_NAME=\"AirborneNY\"\n\nFRAMEWORK=\"${UNIVERSAL_LIBRARY_DIR}/${FRAMEWORK_NAME}.framework\"\n\nOUTPUT_DIR=\"./${PROJECT_NAME}-Framework\"\n\n# Clean and build the framework for the iOS simulator\nxcodebuild -project ${PROJECT_NAME}.xcodeproj \\\n    -scheme ${PROJECT_NAME} \\\n    -sdk iphonesimulator \\\n    -configuration ${CONFIGURATION} \\\n    -destination 'generic/platform=iOS Simulator' \\\n    clean build \\\n    CONFIGURATION_BUILD_DIR=${BUILD_DIR}/Release-iphonesimulator \\\n    -UseModernBuildSystem=YES > /dev/null\n\n# Clean and build the framework for iOS devices\nxcodebuild -project ${PROJECT_NAME}.xcodeproj \\\n    -scheme ${PROJECT_NAME} \\\n    -sdk iphoneos \\\n    -configuration ${CONFIGURATION} \\\n    -destination 'generic/platform=iOS' \\\n    build \\\n    CONFIGURATION_BUILD_DIR=${BUILD_DIR}/${CONFIGURATION}-iphoneos \\\n    -UseModernBuildSystem=YES > /dev/null\n\n# Remove any existing build directories\nrm -rf \"${BUILD_DIR}/iphone\"\nrm -rf \"${BUILD_DIR}/simulator\"\n\n# Create directories to hold device and simulator builds\nmkdir \"${BUILD_DIR}/iphone\"\nmkdir \"${BUILD_DIR}/simulator\"\n\nrm -rf ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework\ncp -r ${BUILD_DIR}/${CONFIGURATION}-iphoneos/${FRAMEWORK_NAME}.framework ${BUILD_DIR}/iphone/${FRAMEWORK_NAME}.framework\ncp -r ${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/${FRAMEWORK_NAME}.framework ${BUILD_DIR}/simulator/${FRAMEWORK_NAME}.framework\n\n# Create an XCFramework from the device and simulator builds\nxcrun xcodebuild -create-xcframework -framework ${BUILD_DIR}/iphone/${FRAMEWORK_NAME}.framework -framework ${BUILD_DIR}/simulator/${FRAMEWORK_NAME}.framework -output ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework\n\nrm -rf \"$OUTPUT_DIR/${FRAMEWORK_NAME}.xcframework\"\nmkdir -p \"$OUTPUT_DIR\"\n\n# Copy the XCFramework to the output directory\ncp -r ${BUILD_DIR}/${FRAMEWORK_NAME}.xcframework ${OUTPUT_DIR}\n\nopen \"${OUTPUT_DIR}\"\n\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -618,8 +618,8 @@
 				MODULEMAP_FILE = Airborne/Airborne.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = in.juspay.Airborne;
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = in.nammayatri.AirborneNY;
+				PRODUCT_NAME = AirborneNY;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INSTALL_MODULE = YES;
@@ -972,8 +972,8 @@
 				MODULEMAP_FILE = Airborne/Airborne.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = in.juspay.Airborne;
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = in.nammayatri.AirborneNY;
+				PRODUCT_NAME = AirborneNY;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INSTALL_MODULE = YES;
@@ -1009,8 +1009,8 @@
 				MODULEMAP_FILE = Airborne/Airborne.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = in.juspay.Airborne;
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = in.nammayatri.AirborneNY;
+				PRODUCT_NAME = AirborneNY;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INSTALL_MODULE = YES;

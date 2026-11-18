@@ -2,7 +2,7 @@
 #import "Airborne.h"
 #import <React/RCTLog.h>
 #import <React/RCTReloadCommand.h>
-#import <Airborne/Airborne-Swift.h>
+#import <AirborneNY/AirborneNY-Swift.h>
 
 @implementation AirborneReact
 

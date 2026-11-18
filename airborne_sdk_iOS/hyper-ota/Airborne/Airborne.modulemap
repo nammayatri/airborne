@@ -1,4 +1,4 @@
-framework module Airborne {
+framework module AirborneNY {
     umbrella header "Airborne.h"
 
     header "AJPHelpers.h"

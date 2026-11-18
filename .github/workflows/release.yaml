@@ -84,7 +84,7 @@ jobs:
     permissions:
       contents: write
     env:
-      PODSPEC_PATH: airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec
+      PODSPEC_PATH: airborne_sdk_iOS/hyper-ota/Airborne-Framework/AirborneNY.podspec
       SPEC_REPO_NAME: nammayatri-specs
       SPEC_REPO_URL: https://github.com/nammayatri/ny-cocoapods-specs.git
     steps:
@@ -115,13 +115,13 @@ jobs:
             -configuration Release \
             -derivedDataPath /tmp/airborne-build \
             -quiet
-          test -d /tmp/airborne-build/Build/Products/Airborne.xcframework
+          test -d /tmp/airborne-build/Build/Products/AirborneNY.xcframework
 
       - name: Zip xcframework
         run: |
-          rm -f /tmp/airborne-build/Build/Products/Airborne.xcframework.zip
-          (cd /tmp/airborne-build/Build/Products && zip -ryq Airborne.xcframework.zip Airborne.xcframework)
-          ls -lh /tmp/airborne-build/Build/Products/Airborne.xcframework.zip
+          rm -f /tmp/airborne-build/Build/Products/AirborneNY.xcframework.zip
+          (cd /tmp/airborne-build/Build/Products && zip -ryq AirborneNY.xcframework.zip AirborneNY.xcframework)
+          ls -lh /tmp/airborne-build/Build/Products/AirborneNY.xcframework.zip
 
       - name: Tag the version
         run: |
@@ -135,7 +135,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v${{ github.event.inputs.ios_version }}" \
-            /tmp/airborne-build/Build/Products/Airborne.xcframework.zip \
+            /tmp/airborne-build/Build/Products/AirborneNY.xcframework.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "Airborne iOS SDK v${{ github.event.inputs.ios_version }}" \
             --notes "Airborne iOS xcframework v${{ github.event.inputs.ios_version }}"
@@ -201,8 +201,8 @@ jobs:
         if: ${{ github.event.inputs.ios_version != '' }}
         working-directory: airborne-react-native
         run: |
-          sed -i 's|s.dependency "Airborne", "[^"]*"|s.dependency "Airborne", "${{ github.event.inputs.ios_version }}"|' AirborneReact.podspec
-          grep 's.dependency "Airborne"' AirborneReact.podspec
+          sed -i 's|s.dependency "AirborneNY", "[^"]*"|s.dependency "AirborneNY", "${{ github.event.inputs.ios_version }}"|' AirborneReact.podspec
+          grep 's.dependency "AirborneNY"' AirborneReact.podspec
 
       - name: Rewrite local airborne-devkit dep to npm
         working-directory: airborne-react-native
@@ -291,7 +291,7 @@ jobs:
             # Note: bumping only the version line. The :http source URL rewrite
             # done in publish-ios stays runner-local — derivable from the version,
             # no need to commit.
-            sed -i "s/s.version[[:space:]]*=[[:space:]]*'.*'/s.version          = '$IOS_VERSION'/" airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec
+            sed -i "s/s.version[[:space:]]*=[[:space:]]*'.*'/s.version          = '$IOS_VERSION'/" airborne_sdk_iOS/hyper-ota/Airborne-Framework/AirborneNY.podspec
           fi
 
           if [ "$RNDIST_RESULT" = "success" ]; then
@@ -307,7 +307,7 @@ jobs:
               sed -i 's|api "com.movingtech:airborne:[^"]*"|api "com.movingtech:airborne:'"$ANDROID_VERSION"'"|' airborne-react-native/android/build.gradle
             fi
             if [ -n "$IOS_VERSION" ] && [ "$IOS_RESULT" != "failure" ]; then
-              sed -i 's|s.dependency "Airborne", "[^"]*"|s.dependency "Airborne", "'"$IOS_VERSION"'"|' airborne-react-native/AirborneReact.podspec
+              sed -i 's|s.dependency "AirborneNY", "[^"]*"|s.dependency "AirborneNY", "'"$IOS_VERSION"'"|' airborne-react-native/AirborneReact.podspec
             fi
           fi
 
@@ -336,7 +336,7 @@ jobs:
           [ "$RNDIST_RESULT" = "success" ]  && parts="$parts rn@$RN_VERSION"
 
           git add airborne_sdk_android/version.properties \
-                  airborne_sdk_iOS/hyper-ota/Airborne-Framework/Airborne.podspec \
+                  airborne_sdk_iOS/hyper-ota/Airborne-Framework/AirborneNY.podspec \
                   airborne-react-native/package.json \
                   airborne-react-native/android/build.gradle \
                   airborne-react-native/AirborneReact.podspec
