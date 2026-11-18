@@ -4,7 +4,7 @@
 //
 
 import XCTest
-@testable import Airborne
+@testable import AirborneNY
 
 final class AJPRemoteFileUtilTests: XCTestCase {
 

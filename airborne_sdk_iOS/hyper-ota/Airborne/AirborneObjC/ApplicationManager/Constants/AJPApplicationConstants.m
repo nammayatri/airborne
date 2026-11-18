@@ -27,11 +27,11 @@ NSString *const APP_RESOURCES_DATA_FILE_NAME = @"app-resources.dat";
 NSString *const APP_OLD_RESOURCES_DATA_FILE_NAME = @"app-resources-old.dat";
 NSString *const APP_TEMP_RESOURCES_DATA_FILE_NAME = @"app-resources-temp.dat";
 
-NSString *const BOOT_TIMEOUT_NOTIFICATION = @"AJPBootTimeoutNotification";
-NSString *const PACKAGE_RESOURCE_NOTIFICATION = @"AJPPackageResourceNotification";
-NSString *const RELEASE_CONFIG_NOTIFICATION = @"AJPReleaseConfigNotification";
-NSString *const RELEASE_CONFIG_TIMEOUT_NOTIFICATION = @"AJPReleaseConfigTimeoutNotification";
-NSString *const LAZY_PACKAGE_NOTIFICATION = @"AJPLazyPackageNotification";
+NSString *const BOOT_TIMEOUT_NOTIFICATION = @"NYAJPBootTimeoutNotification";
+NSString *const PACKAGE_RESOURCE_NOTIFICATION = @"NYAJPPackageResourceNotification";
+NSString *const RELEASE_CONFIG_NOTIFICATION = @"NYAJPReleaseConfigNotification";
+NSString *const RELEASE_CONFIG_TIMEOUT_NOTIFICATION = @"NYAJPReleaseConfigTimeoutNotification";
+NSString *const LAZY_PACKAGE_NOTIFICATION = @"NYAJPLazyPackageNotification";
 
 NSString *const APPL_MANAGER_SUB_CAT = @"hyperota";
 

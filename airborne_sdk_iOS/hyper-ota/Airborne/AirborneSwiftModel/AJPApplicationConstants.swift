@@ -35,11 +35,11 @@ import Foundation
     public static let APP_BG_PENDING_DATA_FILE_NAME = "app-bg-pending.dat"
 
     // MARK: - Notification Names
-    public static let BOOT_TIMEOUT_NOTIFICATION = Notification.Name("AJPBootTimeoutNotification")
-    public static let PACKAGE_RESOURCE_NOTIFICATION = Notification.Name("AJPPackageResourceNotification")
-    public static let RELEASE_CONFIG_NOTIFICATION = Notification.Name("AJPReleaseConfigNotification")
-    public static let RELEASE_CONFIG_TIMEOUT_NOTIFICATION = Notification.Name("AJPReleaseConfigTimeoutNotification")
-    public static let LAZY_PACKAGE_NOTIFICATION = Notification.Name("AJPLazyPackageNotification")
+    public static let BOOT_TIMEOUT_NOTIFICATION = Notification.Name("NYAJPBootTimeoutNotification")
+    public static let PACKAGE_RESOURCE_NOTIFICATION = Notification.Name("NYAJPPackageResourceNotification")
+    public static let RELEASE_CONFIG_NOTIFICATION = Notification.Name("NYAJPReleaseConfigNotification")
+    public static let RELEASE_CONFIG_TIMEOUT_NOTIFICATION = Notification.Name("NYAJPReleaseConfigTimeoutNotification")
+    public static let LAZY_PACKAGE_NOTIFICATION = Notification.Name("NYAJPLazyPackageNotification")
 
     // MARK: - Misc
     public static let APPL_MANAGER_SUB_CAT = "hyperota"

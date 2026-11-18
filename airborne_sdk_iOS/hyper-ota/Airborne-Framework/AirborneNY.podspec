@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name             = 'Airborne'
+  s.name             = 'AirborneNY'
   s.version          = '1.4.5'
   s.summary          = 'An OTA update plugin for Android, iOS and React Native applications.'
   s.description      = <<-DESC
@@ -13,8 +13,8 @@ Our primary focus is to provide robust, easy-to-use SDKs and plugins that stream
     'MovingTech' => 'sdk@nammayatri.in'
   }
 
-  s.source       = { :http => "https://github.com/nammayatri/airborne/releases/download/v#{s.version}/Airborne.xcframework.zip" }
+  s.source       = { :http => "https://github.com/nammayatri/airborne/releases/download/v#{s.version}/AirborneNY.xcframework.zip" }
   
-  s.ios.vendored_frameworks = "Airborne.xcframework"
+  s.ios.vendored_frameworks = "AirborneNY.xcframework"
   s.platform     = :ios, "12.0"
 end

@@ -263,7 +263,7 @@ import AirborneSwiftModel
             return
         }
         lazyPackageObserver = NotificationCenter.default.addObserver(
-            forName: NSNotification.Name("AJPLazyPackageNotification"),
+            forName: AJPApplicationConstants.LAZY_PACKAGE_NOTIFICATION,
             object: nil,
             queue: OperationQueue()
         ) { [weak self] notification in

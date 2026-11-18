@@ -7,7 +7,7 @@
 //
 
 import UIKit
-import Airborne
+import AirborneNY
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {

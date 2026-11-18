@@ -15,7 +15,7 @@
 //
 
 import XCTest
-@testable import Airborne
+@testable import AirborneNY
 
 // MARK: - Test helpers
 

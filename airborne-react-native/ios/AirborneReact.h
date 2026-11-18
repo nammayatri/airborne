@@ -1,7 +1,7 @@
 #import "Airborne.h"
 #ifdef RCT_NEW_ARCH_ENABLED
 #import <AirborneSpec/AirborneSpec.h>
-#import <Airborne/Airborne-Swift.h>
+#import <AirborneNY/AirborneNY-Swift.h>
 
 @interface AirborneReact : NSObject <NativeAirborneSpec>
 #else

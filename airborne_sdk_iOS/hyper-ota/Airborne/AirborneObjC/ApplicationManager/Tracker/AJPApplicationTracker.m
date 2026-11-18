@@ -10,7 +10,7 @@
 #if SWIFT_PACKAGE
 @import AirborneSwiftModel;
 #else
-#import <Airborne/Airborne-Swift.h>
+#import <AirborneNY/AirborneNY-Swift.h>
 #endif
 
 @interface AJPApplicationTracker()
