@@ -80,7 +80,7 @@ jobs:
 
   publish-ios:
     if: ${{ github.event.inputs.publish_ios == 'true' }}
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: write
     env:
